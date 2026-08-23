@@ -4,6 +4,8 @@ import { RegimeTributario } from '../types/regimeTributario';
 import { TipoEmpresa } from '../types/tipoEmpresa';
 import { EmpresaAgricola } from '../types/empresaAgricola';
 import { TipoSolo } from '../types/tipoSolo';
+import { ClasseCapacidadeUso } from '../types/classeCapacidadeUso';
+import { NovaPropriedadePayload, PropriedadeCriadaResponse } from '../types/propriedade';
 
 // Deixe vazio para usar o proxy do Vite (localhost:5173 -> localhost:5000)
 const api = axios.create({});
@@ -23,3 +25,9 @@ export const salvarEmpresa = (dados: any) => api.post('/api/empresas-agricolas',
 export const getEmpresasAgricolas = () => api.get<EmpresaAgricola[]>('/api/empresas-agricolas');
 
 export const getTiposSolo = () => api.get<TipoSolo[]>('/api/tipos-solo');
+
+export const getClassesUso = () => api.get<ClasseCapacidadeUso[]>('/api/classes-uso');
+
+// Cadastra uma nova propriedade rural
+export const criarPropriedade = (dados: NovaPropriedadePayload) =>
+  api.post<PropriedadeCriadaResponse>('/api/propriedades', dados);

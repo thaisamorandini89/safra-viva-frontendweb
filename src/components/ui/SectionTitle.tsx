@@ -1,6 +1,6 @@
 export default function SectionTitle({ children }) {
   return (
-    <h3 className="text-green-700 font-bold text-sm mb-3 mt-5 first:mt-0 pb-1 border-b border-green-100">
+    <h3 className="text-green-700 font-bold text-sm mb-4 mt-8 first:mt-0 pb-2 border-b border-green-100">
       {children}
     </h3>
   );

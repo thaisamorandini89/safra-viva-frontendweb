@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query"; // 1. Importando o hook
+import { useQuery, useMutation } from "@tanstack/react-query"; // 1. Importando o hook
 import { 
   getEmpresasAgricolas, 
   getEstados, 
   getCidadesPorEstado, 
-  getTiposSolo // <-- Importação da nova função da API
+  getTiposSolo, // <-- Importação da nova função da API
+  getClassesUso, // <-- Classes de Capacidade de Uso
+  criarPropriedade // <-- Cadastro de propriedade
 } from "../../services/api";
 import { Estado, Cidade } from "../../types/geo"; 
 import { TipoSolo } from "../../types/tipoSolo";
+import { ClasseCapacidadeUso } from "../../types/classeCapacidadeUso";
+import { NovaPropriedadePayload } from "../../types/propriedade";
 
 import FormWrapper from "./FormWrapper";
 import FormSection from "../ui/FormSection";
@@ -15,34 +19,7 @@ import Field from "../ui/Field";
 import Input from "../ui/Input";
 import Select from "../ui/Select";
 import SectionTitle from "../ui/SectionTitle";
-import Button from "../ui/Button";
-
-function MapPlaceholder() {
-  return (
-    <div className="w-full h-full bg-gray-100 rounded-lg relative flex items-center justify-center overflow-hidden border border-gray-200">
-      <div
-        className="absolute inset-0 opacity-30"
-        style={{
-          backgroundImage:
-            "linear-gradient(#ccc 1px, transparent 1px), linear-gradient(90deg, #ccc 1px, transparent 1px)",
-          backgroundSize: "20px 20px",
-        }}
-      />
-      <div className="bg-white border border-gray-300 rounded px-2 py-1 text-xs text-gray-500 shadow z-10 flex flex-col items-center gap-1">
-        <span className="text-2xl">📍</span>
-        <span>Mato Grosso, BR</span>
-      </div>
-      <div className="absolute top-2 right-2 flex flex-col gap-1">
-        <button className="w-6 h-6 bg-white border border-gray-300 rounded text-sm shadow hover:bg-gray-50">
-          +
-        </button>
-        <button className="w-6 h-6 bg-white border border-gray-300 rounded text-sm shadow hover:bg-gray-50">
-          −
-        </button>
-      </div>
-    </div>
-  );
-}
+import MapaPropriedade from "../ui/MapaPropriedade";
 
 export default function PropriedadeForm() {
   const [estadoSelecionado, setEstadoSelecionado] = useState<string>("");
@@ -51,9 +28,34 @@ export default function PropriedadeForm() {
   const [logradouro, setLogradouro] = useState<string>("");
   const [cidadePendente, setCidadePendente] = useState<string>("");
   const [empresaSelecionada, setEmpresaSelecionada] = useState<string>("");
+  const [nomePropriedade, setNomePropriedade] = useState<string>("");
+
+  // Identificação legal
+  const [car, setCar] = useState<string>("");
+  const [ccir, setCcir] = useState<string>("");
+  const [nirf, setNirf] = useState<string>("");
+
+  // Ponto de referência
+  const [pontoReferencia, setPontoReferencia] = useState<string>("");
+
+  // Dados físicos (áreas)
+  const [areaTotal, setAreaTotal] = useState<string>("");
+  const [areaAgricultavel, setAreaAgricultavel] = useState<string>("");
+  const [areaPreservacao, setAreaPreservacao] = useState<string>("");
+  const [areaPastagem, setAreaPastagem] = useState<string>("");
+  const [areaVegetacaoNativa, setAreaVegetacaoNativa] = useState<string>("");
+  const [altitudeMedia, setAltitudeMedia] = useState<string>("");
+
+  // Coordenadas geográficas (capturadas pelo mapa ou digitadas)
+  const [latitude, setLatitude] = useState<string>("");
+  const [longitude, setLongitude] = useState<string>("");
 
   // <-- Novo estado para o Tipo de Solo
   const [tipoSoloSelecionado, setTipoSoloSelecionado] = useState<string>("");
+
+  // <-- Novo estado para a Classe de Capacidade de Uso
+  const [classeUsoSelecionada, setClasseUsoSelecionada] = useState<string>("");
+  const [observacoes, setObservacoes] = useState<string>("");
 
   // Queries para dados geográficos
   const { data: estados = [] } = useQuery({
@@ -96,6 +98,15 @@ export default function PropriedadeForm() {
     },
   });
 
+  // <-- Nova Query para buscar as Classes de Capacidade de Uso
+  const { data: classesUso = [], isLoading: carregandoClassesUso } = useQuery({
+    queryKey: ["classesUso"],
+    queryFn: async () => {
+      const response = await getClassesUso();
+      return response.data;
+    },
+  });
+
   const buscarCep = async () => {
     const cepLimpo = cep.replace(/\D/g, "");
     if (cepLimpo.length !== 8) {
@@ -125,6 +136,120 @@ export default function PropriedadeForm() {
     }
   };
 
+  // Ao clicar no mapa: preenche os campos de latitude e longitude
+  const handleSelecionarNoMapa = (lat: number, lng: number) => {
+    setLatitude(lat.toFixed(8));
+    setLongitude(lng.toFixed(8));
+  };
+
+  // Converte os campos de texto em uma posição válida para o mapa (ou null)
+  const posicaoMapa: [number, number] | null =
+    latitude !== "" && longitude !== "" && !isNaN(Number(latitude)) && !isNaN(Number(longitude))
+      ? [Number(latitude), Number(longitude)]
+      : null;
+
+  // Nome exibido no tooltip do marcador: prioriza o nome digitado da propriedade,
+  // depois a empresa vinculada e, por fim, um texto padrão.
+  const empresaVinculada = empresas.find(
+    (e) => String(e.id_empresa) === empresaSelecionada
+  );
+  const rotuloMapa =
+    nomePropriedade.trim() ||
+    (empresaVinculada
+      ? empresaVinculada.nome_fantasia || empresaVinculada.razao_social
+      : "Sede da propriedade");
+
+  // Mutation para cadastrar a propriedade no backend
+  const {
+    mutate: salvarPropriedade,
+    isPending: salvando,
+  } = useMutation({
+    mutationFn: async (dados: NovaPropriedadePayload) =>
+      (await criarPropriedade(dados)).data,
+    onSuccess: (resposta) => {
+      alert(
+        `✅ ${resposta.message}\n\nPropriedade: ${resposta.nome_propriedade}\nID: ${resposta.id_propriedade}`
+      );
+      limparFormulario();
+    },
+    onError: (erro: any) => {
+      const msg =
+        erro?.response?.data?.message ||
+        erro?.response?.data?.erro ||
+        erro?.message ||
+        "Erro desconhecido ao cadastrar a propriedade.";
+      alert(`❌ Não foi possível salvar a propriedade.\n\n${msg}`);
+    },
+  });
+
+  // Limpa todos os campos após um cadastro bem-sucedido
+  const limparFormulario = () => {
+    setEmpresaSelecionada("");
+    setNomePropriedade("");
+    setCar("");
+    setCcir("");
+    setNirf("");
+    setEstadoSelecionado("");
+    setCidadeSelecionada("");
+    setCep("");
+    setLogradouro("");
+    setPontoReferencia("");
+    setLatitude("");
+    setLongitude("");
+    setAreaTotal("");
+    setAreaAgricultavel("");
+    setAreaPreservacao("");
+    setAreaPastagem("");
+    setAreaVegetacaoNativa("");
+    setAltitudeMedia("");
+    setTipoSoloSelecionado("");
+    setClasseUsoSelecionada("");
+    setObservacoes("");
+  };
+
+  // Valida os campos obrigatórios e dispara a mutation
+  const handleSalvar = () => {
+    // Validações mínimas dos campos obrigatórios
+    if (!empresaSelecionada) {
+      alert("⚠️ Selecione a Empresa Agrícola vinculada.");
+      return;
+    }
+    if (!nomePropriedade.trim()) {
+      alert("⚠️ Informe o Nome da Propriedade.");
+      return;
+    }
+    if (!car.trim()) {
+      alert("⚠️ Informe o CAR (Cadastro Ambiental Rural).");
+      return;
+    }
+    if (latitude === "" || longitude === "") {
+      alert("⚠️ Defina a localização no mapa (Latitude/Longitude).");
+      return;
+    }
+
+    // Monta o payload no formato esperado pelo backend
+    const payload: NovaPropriedadePayload = {
+      nome_propriedade: nomePropriedade.trim(),
+      id_empresa: Number(empresaSelecionada),
+      latitude: Number(latitude),
+      longitude: Number(longitude),
+    };
+
+    // Campos opcionais — só adiciona se preenchidos
+    if (car.trim()) payload.car = car.trim();
+    if (cep.trim()) payload.cep = cep.replace(/\D/g, "");
+    if (cidadeSelecionada) payload.id_cidade = Number(cidadeSelecionada);
+    if (logradouro.trim()) payload.logradouro = logradouro.trim();
+    if (areaTotal.trim()) payload.area_total = areaTotal.trim();
+    if (areaAgricultavel.trim()) payload.area_agricultavel = areaAgricultavel.trim();
+    if (areaPreservacao.trim()) payload.area_preservacao = areaPreservacao.trim();
+    if (tipoSoloSelecionado) payload.id_tipo_solo = Number(tipoSoloSelecionado);
+    if (classeUsoSelecionada)
+      payload.id_classe_capacidade_uso = Number(classeUsoSelecionada);
+
+    salvarPropriedade(payload);
+  };
+
   useEffect(() => {
     // Só tenta procurar se houver cidades na lista e uma cidade pendente aguardando
     if (cidades.length > 0 && cidadePendente) {
@@ -148,10 +273,8 @@ export default function PropriedadeForm() {
       page="Nova Propriedade"
       title="Cadastro de Propriedade"
       description="Preencha as informações da propriedade rural."
-      saveLabel="Salvar Propriedade"
-      onSave={() =>
-        console.log("Salvar clicado - id empresa:", empresaSelecionada)
-      }
+      saveLabel={salvando ? "Salvando..." : "Salvar Propriedade"}
+      onSave={handleSalvar}
     >
       <FormSection title="Vinculação" cols={2}>
         <Field label="Empresa Agrícola" required>
@@ -182,12 +305,23 @@ export default function PropriedadeForm() {
             ))}
           </Select>
         </Field>
+        <Field label="Nome da Propriedade" required>
+          <Input
+            placeholder="Ex.: Fazenda Boa Vista"
+            value={nomePropriedade}
+            onChange={(e) => setNomePropriedade(e.target.value)}
+          />
+        </Field>
       </FormSection>
 
       <FormSection title="Identificação Legal" cols={3}>
         <Field label="CAR" required>
           <div className="relative">
-            <Input placeholder="Ex.: MT-5104851-1234.5678.9012.3456" />
+            <Input
+              placeholder="Ex.: MT-5104851-1234.5678.9012.3456"
+              value={car}
+              onChange={(e) => setCar(e.target.value)}
+            />
             <span className="absolute right-2 top-2 text-gray-400 text-xs cursor-help">
               ⓘ
             </span>
@@ -195,7 +329,11 @@ export default function PropriedadeForm() {
         </Field>
         <Field label="CCIR">
           <div className="relative">
-            <Input placeholder="Ex.: 123.456.789.012-3" />
+            <Input
+              placeholder="Ex.: 123.456.789.012-3"
+              value={ccir}
+              onChange={(e) => setCcir(e.target.value)}
+            />
             <span className="absolute right-2 top-2 text-gray-400 text-xs cursor-help">
               ⓘ
             </span>
@@ -203,7 +341,11 @@ export default function PropriedadeForm() {
         </Field>
         <Field label="NIRF">
           <div className="relative">
-            <Input placeholder="Ex.: 5.123.456-7" />
+            <Input
+              placeholder="Ex.: 5.123.456-7"
+              value={nirf}
+              onChange={(e) => setNirf(e.target.value)}
+            />
             <span className="absolute right-2 top-2 text-gray-400 text-xs cursor-help">
               ⓘ
             </span>
@@ -263,54 +405,101 @@ export default function PropriedadeForm() {
           />
         </Field>
         <Field label="Ponto de Referência" className="col-span-2">
-          <Input placeholder="Ex.: Após a ponte, entrar à direita" />
+          <Input
+            placeholder="Ex.: Após a ponte, entrar à direita"
+            value={pontoReferencia}
+            onChange={(e) => setPontoReferencia(e.target.value)}
+          />
         </Field>
       </FormSection>
 
-      {/* Coordenadas + Mapa lado a lado — layout especial, fora do FormSection */}
-      <div className="grid grid-cols-2 gap-4 mt-3">
-        <div>
+      {/* Coordenadas + Mapa — layout especial, fora do FormSection */}
+      <div>
+        <div className="flex items-center justify-between">
           <SectionTitle>Coordenadas Geográficas</SectionTitle>
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <Field label="Latitude" required>
-              <Input placeholder="Ex.: -12.34567890" />
-            </Field>
-            <Field label="Longitude" required>
-              <Input placeholder="Ex.: -55.67890123" />
-            </Field>
-          </div>
-          <Button variant="primary">📍 Abrir Mapa</Button>
+          <span className="text-xs text-gray-500 flex items-center gap-1 whitespace-nowrap ml-4">
+            📍 Clique no mapa para definir a localização da sede
+          </span>
         </div>
-        <div className="h-44 mt-5">
-          <MapPlaceholder />
-          <p className="text-xs text-gray-400 mt-1 text-center">
-            *Clique no mapa para definir a localização da sede da propriedade.
-          </p>
+
+        {/* Faixa compacta com os campos de coordenadas */}
+        <div className="grid grid-cols-2 gap-5 mb-4 max-w-md">
+          <Field label="Latitude" required>
+            <Input
+              placeholder="Ex.: -12.34567890"
+              value={latitude}
+              onChange={(e) => setLatitude(e.target.value)}
+            />
+          </Field>
+          <Field label="Longitude" required>
+            <Input
+              placeholder="Ex.: -55.67890123"
+              value={longitude}
+              onChange={(e) => setLongitude(e.target.value)}
+            />
+          </Field>
         </div>
+
+        {/* Mapa grande em largura total */}
+        <div className="h-[420px] w-full rounded-lg overflow-hidden border border-gray-200 shadow-sm">
+          <MapaPropriedade
+            posicao={posicaoMapa}
+            onSelecionar={handleSelecionarNoMapa}
+            label={rotuloMapa}
+          />
+        </div>
+        <p className="text-xs text-gray-400 mt-1">
+          💡 Clique em qualquer ponto do mapa para preencher as coordenadas
+          automaticamente, ou digite manualmente nos campos acima.
+        </p>
       </div>
 
       <FormSection title="Dados Físicos" cols={3}>
         <Field label="Área Total (ha)" required>
-          <Input placeholder="Ex.: 1.500,00" />
+          <Input
+            placeholder="Ex.: 1.500,00"
+            value={areaTotal}
+            onChange={(e) => setAreaTotal(e.target.value)}
+          />
         </Field>
         <Field label="Área Agricultável (ha)" required>
-          <Input placeholder="Ex.: 1.100,00" />
+          <Input
+            placeholder="Ex.: 1.100,00"
+            value={areaAgricultavel}
+            onChange={(e) => setAreaAgricultavel(e.target.value)}
+          />
         </Field>
         <Field label="Área de Preservação (APP + Reserva) (ha)" required>
-          <Input placeholder="Ex.: 400,00" />
+          <Input
+            placeholder="Ex.: 400,00"
+            value={areaPreservacao}
+            onChange={(e) => setAreaPreservacao(e.target.value)}
+          />
         </Field>
         <Field label="Área de Pastagem (ha)">
-          <Input placeholder="Ex.: 0,00" />
+          <Input
+            placeholder="Ex.: 0,00"
+            value={areaPastagem}
+            onChange={(e) => setAreaPastagem(e.target.value)}
+          />
         </Field>
         <Field label="Área de Vegetação Nativa (ha)">
-          <Input placeholder="Ex.: 0,00" />
+          <Input
+            placeholder="Ex.: 0,00"
+            value={areaVegetacaoNativa}
+            onChange={(e) => setAreaVegetacaoNativa(e.target.value)}
+          />
         </Field>
         <Field label="Altitude Média (m)">
-          <Input placeholder="Ex.: 450" />
+          <Input
+            placeholder="Ex.: 450"
+            value={altitudeMedia}
+            onChange={(e) => setAltitudeMedia(e.target.value)}
+          />
         </Field>
       </FormSection>
 
-      <FormSection title="Outras Informações" cols={3}>
+      <FormSection title="Outras Informações" cols={2}>
         <Field label="Tipo de Solo Predominante">
           {/* <-- Select de Tipos de Solo atualizado */}
           <Select
@@ -329,19 +518,44 @@ export default function PropriedadeForm() {
           </Select>
         </Field>
         <Field label="Classe de Capacidade de Uso">
-          <Select placeholder="Selecione" />
-        </Field>
-        <Field label="Observações">
-          <textarea
-            rows={3}
-            placeholder="Informações adicionais sobre a propriedade..."
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-400 resize-none transition"
-          />
-          <div className="text-right text-xs text-gray-400 -mt-1">
-            0/500 caracteres
-          </div>
+          <Select
+            value={classeUsoSelecionada}
+            onChange={(e) => setClasseUsoSelecionada(e.target.value)}
+            disabled={carregandoClassesUso}
+          >
+            <option value="">
+              {carregandoClassesUso ? "Carregando..." : "Selecione"}
+            </option>
+            {classesUso.map((classe: ClasseCapacidadeUso) => (
+              <option
+                key={classe.id_classe_capacidade_uso}
+                value={classe.id_classe_capacidade_uso}
+                title={classe.descricao}
+              >
+                {classe.sigla} -{" "}
+                {classe.aptidao_principal ?? "Lavouras (sem restrições)"}
+              </option>
+            ))}
+          </Select>
         </Field>
       </FormSection>
+
+      {/* Observações em largura total */}
+      <div className="mt-6">
+        <Field label="Observações">
+          <textarea
+            rows={5}
+            maxLength={1000}
+            value={observacoes}
+            onChange={(e) => setObservacoes(e.target.value)}
+            placeholder="Informações adicionais sobre a propriedade..."
+            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-400 resize-y transition"
+          />
+          <div className="text-right text-xs text-gray-400 mt-1">
+            {observacoes.length}/1000 caracteres
+          </div>
+        </Field>
+      </div>
     </FormWrapper>
   );
 }
