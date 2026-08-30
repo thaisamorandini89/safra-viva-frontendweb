@@ -1,4 +1,10 @@
 export default function TopBar({ breadcrumb, page }) {
+  const dataAtual = new Date().toLocaleDateString("pt-BR", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+
   return (
     <div className="flex items-center justify-between px-6 py-3 border-b border-gray-200 bg-white">
       <div className="text-sm text-gray-500">
@@ -7,7 +13,7 @@ export default function TopBar({ breadcrumb, page }) {
         <span className="font-semibold text-gray-700">{page}</span>
       </div>
       <div className="flex items-center gap-4 text-sm text-gray-500">
-        <span>📅 15 de Maio de 2024</span>
+        <span>📅 {dataAtual}</span>
         <span className="relative">
           🔔
           <span className="absolute -top-1 -right-1 bg-orange-400 text-white text-xs w-4 h-4 rounded-full flex items-center justify-center">

@@ -11,7 +11,7 @@ const navItems: NavItem[] = [
   { icon: "🏢", label: "Empresas Agrícolas", tab: 0 },
   { icon: "🌿", label: "Propriedades", tab: 1 },
   { icon: "🗂️", label: "Talhões", tab: 2 },
-  { icon: "⚙️", label: "Atividades" },
+  { icon: "🚜", label: "Atividades", tab: 3 },
   { icon: "💰", label: "Financeiro" },
   { icon: "📦", label: "Insumos" },
   { icon: "📊", label: "Relatórios" },

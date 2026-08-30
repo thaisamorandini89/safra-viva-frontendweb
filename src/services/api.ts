@@ -7,7 +7,9 @@ import { TipoSolo } from '../types/tipoSolo';
 import { ClasseCapacidadeUso } from '../types/classeCapacidadeUso';
 import { NovaPropriedadePayload, PropriedadeCriadaResponse } from '../types/propriedade';
 import { Talhao, NovoTalhaoPayload } from '../types/talhao';
+import { AtividadeAgricola, NovaAtividadePayload } from '../types/atividade';
 import { TALHOES_MOCK } from './talhoesMock';
+import { ATIVIDADES_MOCK } from './atividadesMock';
 
 // Deixe vazio para usar o proxy do Vite (localhost:5173 -> localhost:5000)
 const api = axios.create({});
@@ -67,5 +69,32 @@ export async function criarTalhao(dados: NovoTalhaoPayload): Promise<Talhao> {
       data_cadastro: new Date().toISOString().slice(0, 10),
       historico: [],
     } as Talhao;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Atividades Agrícolas
+// ---------------------------------------------------------------------------
+
+export async function getAtividades(): Promise<AtividadeAgricola[]> {
+  try {
+    const { data } = await api.get<AtividadeAgricola[]>('/api/atividades');
+    if (Array.isArray(data) && data.length) return data;
+    return ATIVIDADES_MOCK;
+  } catch {
+    console.warn('[atividades] endpoint indisponível — usando dados de demonstração.');
+    return ATIVIDADES_MOCK;
+  }
+}
+
+export async function criarAtividade(
+  dados: NovaAtividadePayload
+): Promise<AtividadeAgricola> {
+  try {
+    const { data } = await api.post<AtividadeAgricola>('/api/atividades', dados);
+    return data;
+  } catch {
+    // Fallback local: gera uma atividade "salva" apenas em memória
+    return { ...dados, id: `local-${Date.now()}` } as AtividadeAgricola;
   }
 }
