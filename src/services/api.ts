@@ -8,8 +8,15 @@ import { ClasseCapacidadeUso } from '../types/classeCapacidadeUso';
 import { NovaPropriedadePayload, PropriedadeCriadaResponse } from '../types/propriedade';
 import { Talhao, NovoTalhaoPayload } from '../types/talhao';
 import { AtividadeAgricola, NovaAtividadePayload } from '../types/atividade';
+import {
+  Insumo,
+  MovimentacaoEstoque,
+  NovoInsumoPayload,
+  NovaMovimentacaoPayload,
+} from '../types/insumo';
 import { TALHOES_MOCK } from './talhoesMock';
 import { ATIVIDADES_MOCK } from './atividadesMock';
+import { INSUMOS_MOCK_ESTOQUE, MOVIMENTACOES_MOCK } from './insumosMock';
 
 // Deixe vazio para usar o proxy do Vite (localhost:5173 -> localhost:5000)
 const api = axios.create({});
@@ -96,5 +103,56 @@ export async function criarAtividade(
   } catch {
     // Fallback local: gera uma atividade "salva" apenas em memória
     return { ...dados, id: `local-${Date.now()}` } as AtividadeAgricola;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Insumos e movimentações de estoque
+// ---------------------------------------------------------------------------
+
+export async function getInsumos(): Promise<Insumo[]> {
+  try {
+    const { data } = await api.get<Insumo[]>('/api/insumos');
+    if (Array.isArray(data) && data.length) return data;
+    return INSUMOS_MOCK_ESTOQUE;
+  } catch {
+    console.warn('[insumos] endpoint indisponível — usando dados de demonstração.');
+    return INSUMOS_MOCK_ESTOQUE;
+  }
+}
+
+export async function criarInsumo(dados: NovoInsumoPayload): Promise<Insumo> {
+  try {
+    const { data } = await api.post<Insumo>('/api/insumos', dados);
+    return data;
+  } catch {
+    // Fallback local: gera um insumo "salvo" apenas em memória
+    return { ...dados, id: `local-${Date.now()}`, lotes: [] } as Insumo;
+  }
+}
+
+export async function getMovimentacoes(): Promise<MovimentacaoEstoque[]> {
+  try {
+    const { data } = await api.get<MovimentacaoEstoque[]>('/api/movimentacoes-estoque');
+    if (Array.isArray(data) && data.length) return data;
+    return MOVIMENTACOES_MOCK;
+  } catch {
+    console.warn('[insumos] movimentações indisponíveis — usando dados de demonstração.');
+    return MOVIMENTACOES_MOCK;
+  }
+}
+
+export async function criarMovimentacao(
+  dados: NovaMovimentacaoPayload
+): Promise<MovimentacaoEstoque> {
+  try {
+    const { data } = await api.post<MovimentacaoEstoque>(
+      '/api/movimentacoes-estoque',
+      dados
+    );
+    return data;
+  } catch {
+    // Fallback local: gera uma movimentação "salva" apenas em memória
+    return { ...dados, id: `local-${Date.now()}` } as MovimentacaoEstoque;
   }
 }

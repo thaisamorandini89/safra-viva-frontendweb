@@ -13,7 +13,7 @@ const navItems: NavItem[] = [
   { icon: "🗂️", label: "Talhões", tab: 2 },
   { icon: "🚜", label: "Atividades", tab: 3 },
   { icon: "💰", label: "Financeiro" },
-  { icon: "📦", label: "Insumos" },
+  { icon: "📦", label: "Insumos", tab: 4 },
   { icon: "📊", label: "Relatórios" },
   { icon: "🗺️", label: "Mapa" },
   { icon: "⚙️", label: "Configurações" },
