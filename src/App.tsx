@@ -2,10 +2,12 @@ import { useState } from "react";
 import Sidebar from "./components/layout/Sidebar";
 import EmpresaForm from "./components/forms/EmpresaForm";
 import PropriedadeForm from "./components/forms/PropriedadeForm";
+import TalhoesModule from "./components/talhoes/TalhoesModule";
 
 const TABS = [
   { label: "Empresa Agrícola", icon: "🏢" },
   { label: "Propriedade", icon: "🌿" },
+  { label: "Talhões", icon: "🗂️" },
 ];
 
 export default function App() {
@@ -35,7 +37,9 @@ export default function App() {
           ))}
         </div>
 
-        {tab === 0 ? <EmpresaForm /> : <PropriedadeForm />}
+        {tab === 0 && <EmpresaForm />}
+        {tab === 1 && <PropriedadeForm />}
+        {tab === 2 && <TalhoesModule />}
       </div>
     </div>
   );

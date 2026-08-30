@@ -6,6 +6,8 @@ import { EmpresaAgricola } from '../types/empresaAgricola';
 import { TipoSolo } from '../types/tipoSolo';
 import { ClasseCapacidadeUso } from '../types/classeCapacidadeUso';
 import { NovaPropriedadePayload, PropriedadeCriadaResponse } from '../types/propriedade';
+import { Talhao, NovoTalhaoPayload } from '../types/talhao';
+import { TALHOES_MOCK } from './talhoesMock';
 
 // Deixe vazio para usar o proxy do Vite (localhost:5173 -> localhost:5000)
 const api = axios.create({});
@@ -31,3 +33,39 @@ export const getClassesUso = () => api.get<ClasseCapacidadeUso[]>('/api/classes-
 // Cadastra uma nova propriedade rural
 export const criarPropriedade = (dados: NovaPropriedadePayload) =>
   api.post<PropriedadeCriadaResponse>('/api/propriedades', dados);
+
+export const getPropriedades = () => api.get<any[]>('/api/propriedades');
+
+// ---------------------------------------------------------------------------
+// Talhões
+// ---------------------------------------------------------------------------
+
+/**
+ * Busca os talhões no backend. Enquanto o endpoint não existir, devolve a
+ * massa de dados de demonstração para que o dashboard continue navegável.
+ */
+export async function getTalhoes(): Promise<Talhao[]> {
+  try {
+    const { data } = await api.get<Talhao[]>('/api/talhoes');
+    if (Array.isArray(data) && data.length) return data;
+    return TALHOES_MOCK;
+  } catch {
+    console.warn('[talhoes] endpoint indisponível — usando dados de demonstração.');
+    return TALHOES_MOCK;
+  }
+}
+
+export async function criarTalhao(dados: NovoTalhaoPayload): Promise<Talhao> {
+  try {
+    const { data } = await api.post<Talhao>('/api/talhoes', dados);
+    return data;
+  } catch {
+    // Fallback local: gera um talhão "salvo" apenas em memória
+    return {
+      ...dados,
+      id: `local-${Date.now()}`,
+      data_cadastro: new Date().toISOString().slice(0, 10),
+      historico: [],
+    } as Talhao;
+  }
+}

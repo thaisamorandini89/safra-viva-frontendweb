@@ -1,10 +1,16 @@
 import Logo from "./Logo";
 
-const navItems = [
+interface NavItem {
+  icon: string;
+  label: string;
+  tab?: number;
+}
+
+const navItems: NavItem[] = [
   { icon: "🏠", label: "Início" },
   { icon: "🏢", label: "Empresas Agrícolas", tab: 0 },
   { icon: "🌿", label: "Propriedades", tab: 1 },
-  { icon: "🗂️", label: "Talhões" },
+  { icon: "🗂️", label: "Talhões", tab: 2 },
   { icon: "⚙️", label: "Atividades" },
   { icon: "💰", label: "Financeiro" },
   { icon: "📦", label: "Insumos" },
@@ -13,7 +19,12 @@ const navItems = [
   { icon: "⚙️", label: "Configurações" },
 ];
 
-export default function Sidebar({ activeTab, onTabChange }) {
+interface SidebarProps {
+  activeTab: number;
+  onTabChange: (tab: number) => void;
+}
+
+export default function Sidebar({ activeTab, onTabChange }: SidebarProps) {
   return (
     <aside className="w-52 min-h-screen bg-green-900 flex flex-col py-4 shrink-0">
       <div className="px-4 mb-8">
