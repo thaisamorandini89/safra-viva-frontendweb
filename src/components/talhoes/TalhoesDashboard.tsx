@@ -27,6 +27,24 @@ interface Props {
 }
 
 export default function TalhoesDashboard({ talhoes, onVerTalhao }: Props) {
+  // Deduplica por código: se o backend devolver registros repetidos do mesmo
+  // talhão (mesmo código), mantém apenas o de id mais recente. Protege os
+  // totais de área contra duplicatas no banco.
+  const talhoesUnicos = useMemo(() => {
+    const porCodigo = new Map<string, Talhao>();
+    talhoes.forEach((t) => {
+      const chave = (t.codigo || t.id).trim().toLowerCase();
+      const existente = porCodigo.get(chave);
+      if (!existente || Number(t.id) > Number(existente.id)) {
+        porCodigo.set(chave, t);
+      }
+    });
+    return Array.from(porCodigo.values());
+  }, [talhoes]);
+
+  // A partir daqui, todos os cálculos usam a lista deduplicada
+  talhoes = talhoesUnicos;
+
   // Safras disponíveis no histórico, mais recentes primeiro
   const safras = useMemo(() => {
     const set = new Set<string>();
