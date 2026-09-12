@@ -130,6 +130,67 @@ export async function criarTalhao(dados: NovoTalhaoPayload): Promise<Talhao> {
   }
 }
 
+/**
+ * Atualiza um talhão existente (PUT parcial).
+ * Converte o payload do frontend para o formato do backend, resolvendo o
+ * id do tipo de solo a partir da descrição selecionada.
+ */
+export async function atualizarTalhao(
+  id: string,
+  dados: NovoTalhaoPayload
+): Promise<Talhao> {
+  // Resolve o id do tipo de solo a partir da descrição selecionada no form
+  let idTipoSolo: number | undefined;
+  try {
+    const { data: tipos } = await getTiposSolo();
+    idTipoSolo = tipos.find(
+      (t) => t.descricao.trim().toLowerCase() === dados.tipo_solo.trim().toLowerCase()
+    )?.id;
+  } catch {
+    /* segue sem id_tipo_solo; backend validará */
+  }
+
+  // Converte para o formato esperado pelo backend (mesmos nomes do cadastro)
+  const payload = {
+    nome_talhao: dados.nome,
+    codigo_talhao: dados.codigo,
+    id_propriedade: dados.id_propriedade,
+    area_total: dados.area_total,
+    area_utilizavel: dados.area_utilizavel,
+    status_inicial: dados.status,
+    id_tipo_solo: idTipoSolo,
+    topografia: dados.topografia,
+    observacoes: dados.observacoes,
+    latitude: dados.latitude,
+    longitude: dados.longitude,
+  };
+
+  const { data } = await api.put(`/api/talhoes/${id}`, payload);
+  // Alguns backends devolvem só uma mensagem no PUT — nesse caso, refletimos
+  // localmente os dados enviados para manter a UI consistente.
+  const atualizado = mapTalhao(data);
+  return {
+    ...atualizado,
+    id: atualizado.id || id,
+    nome: atualizado.nome || dados.nome,
+    codigo: atualizado.codigo || dados.codigo,
+    id_propriedade: atualizado.id_propriedade || dados.id_propriedade,
+    area_total: atualizado.area_total || dados.area_total,
+    area_utilizavel: atualizado.area_utilizavel || dados.area_utilizavel,
+    tipo_solo: atualizado.tipo_solo || dados.tipo_solo,
+    topografia: atualizado.topografia ?? dados.topografia,
+    status: atualizado.status || dados.status,
+    observacoes: atualizado.observacoes ?? dados.observacoes,
+    latitude: atualizado.latitude ?? dados.latitude ?? null,
+    longitude: atualizado.longitude ?? dados.longitude ?? null,
+  };
+}
+
+/** Exclui um talhão pelo id (DELETE /api/talhoes/:id) */
+export async function excluirTalhao(id: string): Promise<void> {
+  await api.delete(`/api/talhoes/${id}`);
+}
+
 // ---------------------------------------------------------------------------
 // Atividades Agrícolas
 // ---------------------------------------------------------------------------

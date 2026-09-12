@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getTalhoes, criarTalhao } from "../../services/api";
+import { getTalhoes, criarTalhao, atualizarTalhao, excluirTalhao } from "../../services/api";
 import { Talhao, NovoTalhaoPayload } from "../../types/talhao";
 import { colors } from "../../theme";
 import TopBar from "../layout/TopBar";
@@ -21,6 +21,8 @@ const ABAS: { id: Aba; icone: string; label: string }[] = [
 export default function TalhoesModule() {
   const [aba, setAba] = useState<Aba>("dashboard");
   const [selecionado, setSelecionado] = useState<Talhao | null>(null);
+  // Talhão em edição — quando definido, o formulário abre pré-preenchido
+  const [editando, setEditando] = useState<Talhao | null>(null);
   const queryClient = useQueryClient();
 
   const {
@@ -52,11 +54,75 @@ export default function TalhoesModule() {
     },
   });
 
+  const { mutate: atualizar, isPending: atualizando } = useMutation({
+    mutationFn: ({ id, dados }: { id: string; dados: NovoTalhaoPayload }) =>
+      atualizarTalhao(id, dados),
+    onSuccess: (atualizado) => {
+      // Substitui o talhão editado no cache local
+      queryClient.setQueryData<Talhao[]>(["talhoes"], (antigos = []) =>
+        antigos.map((t) => (t.id === atualizado.id ? atualizado : t))
+      );
+      // Revalida com o backend para garantir consistência
+      queryClient.invalidateQueries({ queryKey: ["talhoes"] });
+      alert(`✅ Talhão "${atualizado.nome}" atualizado com sucesso!`);
+      setEditando(null);
+      setSelecionado(atualizado);
+    },
+    onError: (erro: any) => {
+      alert(
+        `❌ Não foi possível atualizar o talhão.\n\n${
+          erro?.response?.data?.message ?? erro?.message ?? "Erro desconhecido."
+        }`
+      );
+    },
+  });
+
   const abrirTalhao = (t: Talhao) => setSelecionado(t);
+
+  // Abre o formulário em modo edição a partir do detalhe
+  const iniciarEdicao = (t: Talhao) => {
+    setSelecionado(null);
+    setEditando(t);
+    setAba("novo");
+  };
+
+  const { mutate: excluir } = useMutation({
+    mutationFn: (id: string) => excluirTalhao(id),
+    onSuccess: (_res, id) => {
+      // Remove o talhão do cache local imediatamente
+      queryClient.setQueryData<Talhao[]>(["talhoes"], (antigos = []) =>
+        antigos.filter((t) => t.id !== id)
+      );
+      queryClient.invalidateQueries({ queryKey: ["talhoes"] });
+    },
+    onError: (erro: any) => {
+      alert(
+        `❌ Não foi possível excluir o talhão.\n\n${
+          erro?.response?.data?.message ?? erro?.message ?? "Erro desconhecido."
+        }`
+      );
+    },
+  });
+
+  // Pede confirmação antes de excluir (evita exclusão acidental)
+  const confirmarExclusao = (t: Talhao) => {
+    if (
+      window.confirm(
+        `Tem certeza que deseja excluir o talhão "${t.nome}" (${t.codigo})?\n\nEsta ação não pode ser desfeita.`
+      )
+    ) {
+      excluir(t.id);
+    }
+  };
 
   const cabecalho =
     selecionado != null
       ? { titulo: selecionado.nome, descricao: "Detalhes e histórico do talhão" }
+      : editando != null
+      ? {
+          titulo: `Editar ${editando.nome}`,
+          descricao: "Atualize os dados da área produtiva",
+        }
       : aba === "dashboard"
       ? {
           titulo: "Dashboard de Talhões",
@@ -86,7 +152,10 @@ export default function TalhoesModule() {
           {ABAS.map((a) => (
             <button
               key={a.id}
-              onClick={() => setAba(a.id)}
+              onClick={() => {
+                setEditando(null);
+                setAba(a.id);
+              }}
               className={`px-5 py-2.5 text-sm font-semibold border-b-2 transition-colors -mb-px
                 ${aba === a.id
                   ? "border-green-600 text-green-700"
@@ -123,6 +192,7 @@ export default function TalhoesModule() {
                 <TalhaoDetalhe
                   talhao={selecionado}
                   onVoltar={() => setSelecionado(null)}
+                  onEditar={iniciarEdicao}
                 />
               ) : aba === "dashboard" ? (
                 <TalhoesDashboard talhoes={talhoes} onVerTalhao={abrirTalhao} />
@@ -131,13 +201,24 @@ export default function TalhoesModule() {
                   talhoes={talhoes}
                   onVerTalhao={abrirTalhao}
                   onNovo={() => setAba("novo")}
+                  onEditar={iniciarEdicao}
+                  onExcluir={confirmarExclusao}
                 />
               ) : (
                 <TalhaoForm
+                  key={editando?.id ?? "novo"}
                   talhoes={talhoes}
-                  salvando={salvando}
-                  onCancelar={() => setAba("lista")}
-                  onSalvar={(dados) => salvar(dados)}
+                  talhaoEditar={editando}
+                  salvando={salvando || atualizando}
+                  onCancelar={() => {
+                    setEditando(null);
+                    setAba("lista");
+                  }}
+                  onSalvar={(dados) =>
+                    editando
+                      ? atualizar({ id: editando.id, dados })
+                      : salvar(dados)
+                  }
                 />
               )}
             </>
