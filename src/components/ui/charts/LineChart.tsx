@@ -61,10 +61,10 @@ export default function LineChart({
         onMouseLeave={() => setIndiceHover(null)}
       >
         <defs>
-          {series.map((s) => (
+          {series.map((s, si) => (
             <linearGradient
-              key={s.nome}
-              id={`grad-${s.nome.replace(/\W/g, "")}`}
+              key={`${s.nome}-${si}`}
+              id={`grad-${s.nome.replace(/\W/g, "")}-${si}`}
               x1="0"
               y1="0"
               x2="0"
@@ -116,7 +116,7 @@ export default function LineChart({
         )}
 
         {/* Séries */}
-        {series.map((s) => {
+        {series.map((s, si) => {
           const pts = categorias
             .map((c, i) => {
               const p = s.pontos.find((pp) => pp.x === c);
@@ -130,8 +130,8 @@ export default function LineChart({
           const apagado = foco != null && foco !== s.nome;
 
           return (
-            <g key={s.nome} opacity={apagado ? 0.15 : 1} className="transition-opacity">
-              <path d={area} fill={`url(#grad-${s.nome.replace(/\W/g, "")})`} />
+            <g key={`${s.nome}-${si}`} opacity={apagado ? 0.15 : 1} className="transition-opacity">
+              <path d={area} fill={`url(#grad-${s.nome.replace(/\W/g, "")}-${si})`} />
               <path
                 d={linha}
                 fill="none"
