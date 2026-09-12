@@ -15,11 +15,13 @@ interface Props {
   talhoes: Talhao[];
   onVerTalhao: (t: Talhao) => void;
   onNovo: () => void;
+  onEditar: (t: Talhao) => void;
+  onExcluir: (t: Talhao) => void;
 }
 
 type Coluna = "nome" | "codigo" | "area_total" | "ocupacao" | "status";
 
-export default function TalhoesLista({ talhoes, onVerTalhao, onNovo }: Props) {
+export default function TalhoesLista({ talhoes, onVerTalhao, onNovo, onEditar, onExcluir }: Props) {
   const [busca, setBusca] = useState("");
   const [propriedade, setPropriedade] = useState("todas");
   const [safra, setSafra] = useState("todas");
@@ -296,14 +298,20 @@ export default function TalhoesLista({ talhoes, onVerTalhao, onNovo }: Props) {
                         👁️
                       </button>
                       <button
-                        onClick={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEditar(t);
+                        }}
                         title="Editar"
                         className="px-2 py-1 rounded hover:bg-sky-100 text-gray-500 hover:text-sky-700 transition"
                       >
                         ✏️
                       </button>
                       <button
-                        onClick={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onExcluir(t);
+                        }}
                         title="Excluir"
                         className="px-2 py-1 rounded hover:bg-red-100 text-gray-500 hover:text-red-600 transition"
                       >

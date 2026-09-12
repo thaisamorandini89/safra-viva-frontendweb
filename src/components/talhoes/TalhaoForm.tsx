@@ -22,6 +22,8 @@ import MapaPropriedade from "../ui/MapaPropriedade";
 interface Props {
   /** Talhões já existentes — usados para validar o nome único (RN001) */
   talhoes: Talhao[];
+  /** Quando presente, o formulário entra em modo edição e pré-preenche os campos */
+  talhaoEditar?: Talhao | null;
   onCancelar: () => void;
   onSalvar: (dados: NovoTalhaoPayload) => void;
   salvando?: boolean;
@@ -32,21 +34,36 @@ const SOLOS_PADRAO = ["Arenoso", "Argiloso", "Siltoso", "Misto"];
 
 export default function TalhaoForm({
   talhoes,
+  talhaoEditar,
   onCancelar,
   onSalvar,
   salvando = false,
 }: Props) {
-  const [nome, setNome] = useState("");
-  const [codigo, setCodigo] = useState("");
-  const [idPropriedade, setIdPropriedade] = useState("");
-  const [areaTotal, setAreaTotal] = useState("");
-  const [areaUtilizavel, setAreaUtilizavel] = useState("");
-  const [tipoSolo, setTipoSolo] = useState("");
-  const [topografia, setTopografia] = useState("");
-  const [status, setStatus] = useState<StatusTalhao>("Livre");
-  const [observacoes, setObservacoes] = useState("");
-  const [latitude, setLatitude] = useState("");
-  const [longitude, setLongitude] = useState("");
+  const editando = !!talhaoEditar;
+
+  const [nome, setNome] = useState(talhaoEditar?.nome ?? "");
+  const [codigo, setCodigo] = useState(talhaoEditar?.codigo ?? "");
+  const [idPropriedade, setIdPropriedade] = useState(
+    talhaoEditar ? String(talhaoEditar.id_propriedade) : ""
+  );
+  const [areaTotal, setAreaTotal] = useState(
+    talhaoEditar ? String(talhaoEditar.area_total) : ""
+  );
+  const [areaUtilizavel, setAreaUtilizavel] = useState(
+    talhaoEditar ? String(talhaoEditar.area_utilizavel) : ""
+  );
+  const [tipoSolo, setTipoSolo] = useState(talhaoEditar?.tipo_solo ?? "");
+  const [topografia, setTopografia] = useState(talhaoEditar?.topografia ?? "");
+  const [status, setStatus] = useState<StatusTalhao>(
+    talhaoEditar?.status ?? "Livre"
+  );
+  const [observacoes, setObservacoes] = useState(talhaoEditar?.observacoes ?? "");
+  const [latitude, setLatitude] = useState(
+    talhaoEditar?.latitude != null ? String(talhaoEditar.latitude) : ""
+  );
+  const [longitude, setLongitude] = useState(
+    talhaoEditar?.longitude != null ? String(talhaoEditar.longitude) : ""
+  );
   const [erros, setErros] = useState<Record<string, string>>({});
 
   // Propriedades derivadas dos talhões já carregados
@@ -107,6 +124,7 @@ export default function TalhaoForm({
     // RN001 – Nome único dentro da mesma propriedade
     const duplicado = talhoes.some(
       (t) =>
+        t.id !== talhaoEditar?.id &&
         String(t.id_propriedade) === idPropriedade &&
         t.nome.trim().toLowerCase() === nome.trim().toLowerCase()
     );
@@ -114,7 +132,9 @@ export default function TalhaoForm({
       e.nome = "Já existe um talhão com este nome nesta propriedade (RN001).";
 
     const codigoDuplicado = talhoes.some(
-      (t) => t.codigo.trim().toLowerCase() === codigo.trim().toLowerCase()
+      (t) =>
+        t.id !== talhaoEditar?.id &&
+        t.codigo.trim().toLowerCase() === codigo.trim().toLowerCase()
     );
     if (codigoDuplicado) e.codigo = "Este código já está em uso.";
 
@@ -353,7 +373,11 @@ export default function TalhaoForm({
           Cancelar
         </Button>
         <Button onClick={handleSalvar} disabled={salvando}>
-          {salvando ? "Salvando..." : "Salvar Talhão"}
+          {salvando
+            ? "Salvando..."
+            : editando
+            ? "Salvar Alterações"
+            : "Salvar Talhão"}
         </Button>
       </div>
     </div>

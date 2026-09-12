@@ -21,9 +21,10 @@ import MapaPropriedade from "../ui/MapaPropriedade";
 interface Props {
   talhao: Talhao;
   onVoltar: () => void;
+  onEditar?: (talhao: Talhao) => void;
 }
 
-export default function TalhaoDetalhe({ talhao, onVoltar }: Props) {
+export default function TalhaoDetalhe({ talhao, onVoltar, onEditar }: Props) {
   const base = talhao.area_utilizavel || talhao.area_total;
   const ocupada = areaOcupada(talhao);
   const disponivel = areaDisponivel(talhao);
@@ -99,7 +100,7 @@ export default function TalhaoDetalhe({ talhao, onVoltar }: Props) {
             <Button variant="secondary" onClick={onVoltar}>
               ← Voltar
             </Button>
-            <Button>✏️ Editar talhão</Button>
+            <Button onClick={() => onEditar?.(talhao)}>✏️ Editar talhão</Button>
           </div>
         </div>
 
