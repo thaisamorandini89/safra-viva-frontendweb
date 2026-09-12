@@ -43,7 +43,7 @@ export default function BarChart({
         const pct = d.total ? (d.valor / d.total) * 100 : 0;
         return (
           <li
-            key={d.label}
+            key={`${d.label}-${i}`}
             onMouseEnter={() => setAtivo(i)}
             onMouseLeave={() => setAtivo(null)}
             className="group"

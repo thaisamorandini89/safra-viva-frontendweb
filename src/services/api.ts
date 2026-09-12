@@ -6,7 +6,7 @@ import { EmpresaAgricola } from '../types/empresaAgricola';
 import { TipoSolo } from '../types/tipoSolo';
 import { ClasseCapacidadeUso } from '../types/classeCapacidadeUso';
 import { NovaPropriedadePayload, PropriedadeCriadaResponse } from '../types/propriedade';
-import { Talhao, NovoTalhaoPayload } from '../types/talhao';
+import { Talhao, NovoTalhaoPayload, STATUS_TALHAO, StatusTalhao } from '../types/talhao';
 import { AtividadeAgricola, NovaAtividadePayload } from '../types/atividade';
 import {
   Insumo,
@@ -53,10 +53,35 @@ export const getPropriedades = () => api.get<any[]>('/api/propriedades');
  * Busca os talhões no backend. Enquanto o endpoint não existir, devolve a
  * massa de dados de demonstração para que o dashboard continue navegável.
  */
+/** Normaliza o formato do backend (id_talhao, nome_talhao, ...) para o tipo Talhao do frontend */
+function mapTalhao(raw: any): Talhao {
+  const statusInicial = raw?.status_inicial;
+  const status: StatusTalhao = STATUS_TALHAO.includes(statusInicial)
+    ? statusInicial
+    : 'Livre';
+
+  return {
+    id: String(raw?.id_talhao ?? raw?.id ?? ''),
+    nome: raw?.nome_talhao ?? raw?.nome ?? '',
+    codigo: raw?.codigo_talhao ?? raw?.codigo ?? '',
+    id_propriedade: Number(raw?.id_propriedade ?? 0),
+    nome_propriedade: raw?.propriedade_nome ?? raw?.nome_propriedade,
+    area_total: Number(raw?.area_total ?? 0),
+    area_utilizavel: Number(raw?.area_utilizavel ?? 0),
+    tipo_solo: raw?.tipo_solo_descricao ?? raw?.tipo_solo ?? '',
+    topografia: raw?.topografia,
+    latitude: raw?.latitude ?? null,
+    longitude: raw?.longitude ?? null,
+    status,
+    observacoes: raw?.observacoes,
+    data_cadastro: raw?.data_cadastro ?? '',
+  };
+}
+
 export async function getTalhoes(): Promise<Talhao[]> {
   try {
-    const { data } = await api.get<Talhao[]>('/api/talhoes');
-    if (Array.isArray(data) && data.length) return data;
+    const { data } = await api.get<unknown[]>('/api/talhoes');
+    if (Array.isArray(data) && data.length) return data.map(mapTalhao);
     return TALHOES_MOCK;
   } catch {
     console.warn('[talhoes] endpoint indisponível — usando dados de demonstração.');
@@ -66,8 +91,8 @@ export async function getTalhoes(): Promise<Talhao[]> {
 
 export async function criarTalhao(dados: NovoTalhaoPayload): Promise<Talhao> {
   try {
-    const { data } = await api.post<Talhao>('/api/talhoes', dados);
-    return data;
+    const { data } = await api.post('/api/talhoes', dados);
+    return mapTalhao(data);
   } catch {
     // Fallback local: gera um talhão "salvo" apenas em memória
     return {
