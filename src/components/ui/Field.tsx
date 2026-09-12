@@ -1,6 +1,7 @@
-export default function Field({ label, required = false, children, className = "" }:{
+export default function Field({ label, required = false, error, children, className = "" }:{
   label: string; 
   required?: boolean; // Opcional aqui
+  error?: string; // Mensagem de erro exibida abaixo do campo
   children: React.ReactNode; 
   className?: string
 }) {
@@ -13,6 +14,12 @@ export default function Field({ label, required = false, children, className = "
         </label>
       )}
       {children}
+      {error && (
+        <p className="mt-1 text-xs text-red-600 flex items-center gap-1">
+          <span aria-hidden>⚠️</span>
+          {error}
+        </p>
+      )}
     </div>
   );
 }
