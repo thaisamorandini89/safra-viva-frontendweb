@@ -33,7 +33,30 @@ export const getTiposEmpresas = () => api.get<TipoEmpresa[]>('/api/tipos-empresa
 //export const salvarEmpresa = (dados: any) => api.post('/api/empresas', dados);
 export const salvarEmpresa = (dados: any) => api.post('/api/empresas-agricolas', dados);
 
+export const atualizarEmpresa = (id: number, dados: any) =>
+  api.put(`/api/empresas-agricolas/${id}`, dados);
+
+export const excluirEmpresa = (id: number) =>
+  api.delete(`/api/empresas-agricolas/${id}`);
+
 export const getEmpresasAgricolas = () => api.get<EmpresaAgricola[]>('/api/empresas-agricolas');
+
+/** Lista as empresas agrícolas já normalizadas em array (para React Query) */
+export async function getEmpresas(): Promise<EmpresaAgricola[]> {
+  const { data } = await api.get<EmpresaAgricola[]>('/api/empresas-agricolas');
+  return Array.isArray(data) ? data : [];
+}
+
+/** Lista as propriedades cadastradas (usado para cruzar dados no dashboard) */
+export async function getPropriedadesLista(): Promise<any[]> {
+  try {
+    const { data } = await api.get<any[]>('/api/propriedades');
+    return Array.isArray(data) ? data : [];
+  } catch {
+    console.warn('[propriedades] endpoint indisponível.');
+    return [];
+  }
+}
 
 export const getTiposSolo = () => api.get<TipoSolo[]>('/api/tipos-solo');
 

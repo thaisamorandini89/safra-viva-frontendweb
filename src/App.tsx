@@ -1,7 +1,7 @@
 import { useState } from "react";
 import Sidebar from "./components/layout/Sidebar";
-import EmpresaForm from "./components/forms/EmpresaForm";
-import PropriedadeForm from "./components/forms/PropriedadeForm";
+import EmpresasModule from "./components/empresas/EmpresasModule";
+import PropriedadesModule from "./components/propriedades/PropriedadesModule";
 import TalhoesModule from "./components/talhoes/TalhoesModule";
 import AtividadesModule from "./components/atividades/AtividadesModule";
 import InsumosModule from "./components/insumos/InsumosModule";
@@ -41,8 +41,8 @@ export default function App() {
           ))}
         </div>
 
-        {tab === 0 && <EmpresaForm />}
-        {tab === 1 && <PropriedadeForm />}
+        {tab === 0 && <EmpresasModule />}
+        {tab === 1 && <PropriedadesModule />}
         {tab === 2 && <TalhoesModule />}
         {tab === 3 && <AtividadesModule />}
         {tab === 4 && <InsumosModule />}
