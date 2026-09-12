@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getTalhoes } from "../../services/api";
 import { Talhao } from "../../types/talhao";
@@ -14,6 +14,7 @@ import {
   CATEGORIA_META,
   STATUS_ATIVIDADE,
   StatusAtividade,
+  categoriaDoTipo,
   fmtMoeda,
 } from "../../types/atividade";
 
@@ -29,6 +30,8 @@ interface Props {
   onCancelar: () => void;
   onSalvar: (dados: NovaAtividadePayload) => void;
   salvando?: boolean;
+  /** Quando informada, o formulário entra em modo de edição pré-preenchido */
+  atividadeEdicao?: AtividadeAgricola | null;
 }
 
 const num = (v: string) => Number(String(v).replace(",", ".")) || 0;
@@ -38,7 +41,9 @@ export default function AtividadeForm({
   onCancelar,
   onSalvar,
   salvando = false,
+  atividadeEdicao = null,
 }: Props) {
+  const modoEdicao = atividadeEdicao != null;
   const [categoria, setCategoria] = useState<CategoriaAtividade | "">("");
   const [tipo, setTipo] = useState("");
   const [idTalhao, setIdTalhao] = useState("");
@@ -52,6 +57,28 @@ export default function AtividadeForm({
   const [insumos, setInsumos] = useState<InsumoUtilizado[]>([]);
   const [maquinas, setMaquinas] = useState<MaquinaUtilizada[]>([]);
   const [erros, setErros] = useState<Record<string, string>>({});
+
+  // Pré-preenche o formulário quando em modo de edição
+  useEffect(() => {
+    if (!atividadeEdicao) return;
+    setCategoria(categoriaDoTipo(atividadeEdicao.tipo_atividade));
+    setTipo(atividadeEdicao.tipo_atividade ?? "");
+    setIdTalhao(atividadeEdicao.id_talhao ?? "");
+    setSafra(atividadeEdicao.safra ?? "");
+    setIdResponsavel(
+      atividadeEdicao.id_responsavel ? String(atividadeEdicao.id_responsavel) : ""
+    );
+    setDataInicio(atividadeEdicao.data_inicio ?? "");
+    setDataFim(atividadeEdicao.data_fim ?? "");
+    setStatus(atividadeEdicao.status ?? "Planejada");
+    setCusto(
+      atividadeEdicao.custo_operacao != null ? String(atividadeEdicao.custo_operacao) : ""
+    );
+    setObservacoes(atividadeEdicao.observacoes ?? "");
+    setInsumos(atividadeEdicao.insumos ?? []);
+    setMaquinas(atividadeEdicao.maquinas ?? []);
+    setErros({});
+  }, [atividadeEdicao]);
 
   const { data: talhoes = [] } = useQuery({
     queryKey: ["talhoes"],
@@ -151,6 +178,21 @@ export default function AtividadeForm({
     if (maquinas.some((m) => !m.nome.trim()))
       e.maquinas = "Informe o nome de todas as máquinas adicionadas.";
 
+    // Não permite atividades iguais: mesmo talhão, tipo e data de início
+    if (idTalhao && tipo && dataInicio) {
+      const duplicada = atividades.some(
+        (a) =>
+          a.id !== atividadeEdicao?.id &&
+          a.id_talhao === idTalhao &&
+          a.tipo_atividade === tipo &&
+          a.data_inicio === dataInicio
+      );
+      if (duplicada) {
+        e.duplicada =
+          "Já existe uma atividade deste tipo para o mesmo talhão e data de início. Altere o tipo, o talhão ou a data.";
+      }
+    }
+
     setErros(e);
     return Object.keys(e).length === 0;
   };
@@ -185,6 +227,15 @@ export default function AtividadeForm({
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 lg:p-8">
+      {erros.duplicada && (
+        <div className="mb-5 rounded-lg border border-red-200 bg-red-50 p-4">
+          <p className="text-sm font-semibold text-red-700 flex items-center gap-2">
+            <span aria-hidden>⚠️</span>
+            {erros.duplicada}
+          </p>
+        </div>
+      )}
+
       {/* -------------------------------------------------- Operação executada */}
       <FormSection title="Operação" cols={3}>
         <Field label="Categoria" required>
@@ -469,7 +520,11 @@ export default function AtividadeForm({
           Cancelar
         </Button>
         <Button onClick={handleSalvar} disabled={salvando}>
-          {salvando ? "Salvando..." : "Salvar Atividade"}
+          {salvando
+            ? "Salvando..."
+            : modoEdicao
+            ? "Salvar alterações"
+            : "Salvar Atividade"}
         </Button>
       </div>
     </div>

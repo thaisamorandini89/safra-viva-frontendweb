@@ -66,6 +66,12 @@ export const getClassesUso = () => api.get<ClasseCapacidadeUso[]>('/api/classes-
 export const criarPropriedade = (dados: NovaPropriedadePayload) =>
   api.post<PropriedadeCriadaResponse>('/api/propriedades', dados);
 
+export const atualizarPropriedade = (id: number, dados: any) =>
+  api.put(`/api/propriedades/${id}`, dados);
+
+export const excluirPropriedade = (id: number) =>
+  api.delete(`/api/propriedades/${id}`);
+
 export const getPropriedades = () => api.get<any[]>('/api/propriedades');
 
 // ---------------------------------------------------------------------------

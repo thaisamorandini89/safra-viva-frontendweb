@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getPropriedadesLista } from "../../services/api";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { getPropriedadesLista, excluirPropriedade } from "../../services/api";
 import { colors } from "../../theme";
 import TopBar from "../layout/TopBar";
 import PageHeader from "../ui/PageHeader";
 import Button from "../ui/Button";
 import Toast, { DadosToast } from "../ui/Toast";
+import ConfirmDialog from "../ui/ConfirmDialog";
 import PropriedadesDashboard, { fmtHa } from "./PropriedadesDashboard";
 import PropriedadesLista from "./PropriedadesLista";
 import PropriedadeForm from "../forms/PropriedadeForm";
@@ -21,6 +22,8 @@ const ABAS: { id: Aba; icone: string; label: string }[] = [
 export default function PropriedadesModule() {
   const [aba, setAba] = useState<Aba>("dashboard");
   const [selecionada, setSelecionada] = useState<any | null>(null);
+  const [propriedadeEditando, setPropriedadeEditando] = useState<any | null>(null);
+  const [propriedadeExcluindo, setPropriedadeExcluindo] = useState<any | null>(null);
   const [toast, setToast] = useState<DadosToast | null>(null);
   const queryClient = useQueryClient();
 
@@ -33,15 +36,63 @@ export default function PropriedadesModule() {
     queryFn: getPropriedadesLista,
   });
 
+  const { mutate: removerPropriedade } = useMutation({
+    mutationFn: ({ id }: { id: number; nome: string }) => excluirPropriedade(id),
+    onSuccess: (_data, variaveis) => {
+      queryClient.invalidateQueries({ queryKey: ["propriedades"] });
+      setPropriedadeExcluindo(null);
+      setToast({
+        tipo: "sucesso",
+        titulo: "Propriedade excluída",
+        descricao: `${variaveis.nome} foi removida com sucesso.`,
+      });
+    },
+    onError: (erro: any) => {
+      const mensagemApi = erro?.response?.data?.error ?? erro?.response?.data?.message;
+      setPropriedadeExcluindo(null);
+      setToast({
+        tipo: "erro",
+        titulo: "Não foi possível excluir",
+        descricao:
+          mensagemApi ??
+          "Verifique se a propriedade não possui talhões vinculados e tente novamente.",
+      });
+    },
+  });
+
   const abrirPropriedade = (p: any) => setSelecionada(p);
 
+  const editarPropriedade = (p: any) => {
+    setPropriedadeEditando(p);
+    setSelecionada(null);
+    setAba("novo");
+  };
+
+  // Abre o modal de confirmação de exclusão
+  const excluir = (p: any) => setPropriedadeExcluindo(p);
+
+  // Confirma e dispara a exclusão da propriedade selecionada
+  const confirmarExclusao = () => {
+    if (!propriedadeExcluindo) return;
+    removerPropriedade({
+      id: Number(propriedadeExcluindo.id_propriedade),
+      nome: propriedadeExcluindo.nome_propriedade ?? "A propriedade",
+    });
+  };
+
   const aposSalvar = (nomePropriedade: string) => {
+    const editando = propriedadeEditando != null;
     queryClient.invalidateQueries({ queryKey: ["propriedades"] });
     setToast({
       tipo: "sucesso",
-      titulo: "Propriedade cadastrada com sucesso!",
-      descricao: `${nomePropriedade} já aparece na sua listagem de propriedades.`,
+      titulo: editando
+        ? "Propriedade atualizada com sucesso!"
+        : "Propriedade cadastrada com sucesso!",
+      descricao: editando
+        ? `As alterações de ${nomePropriedade} foram salvas.`
+        : `${nomePropriedade} já aparece na sua listagem de propriedades.`,
     });
+    setPropriedadeEditando(null);
     setAba("lista");
   };
 
@@ -63,13 +114,36 @@ export default function PropriedadesModule() {
           descricao: "Consulte, filtre e exporte todas as propriedades cadastradas",
         }
       : {
-          titulo: "Cadastro de Propriedade",
-          descricao: "Registre uma nova propriedade rural",
+          titulo: propriedadeEditando
+            ? "Editar Propriedade"
+            : "Cadastro de Propriedade",
+          descricao: propriedadeEditando
+            ? `Atualize os dados de ${propriedadeEditando.nome_propriedade}`
+            : "Registre uma nova propriedade rural",
         };
 
   return (
     <div className={`flex-1 overflow-auto ${colors.background.app}`}>
       {toast && <Toast {...toast} onFechar={() => setToast(null)} />}
+
+      <ConfirmDialog
+        aberto={propriedadeExcluindo != null}
+        tipo="perigo"
+        titulo="Excluir propriedade"
+        mensagem={
+          <>
+            Tem certeza que deseja excluir a propriedade{" "}
+            <strong className="text-gray-700">
+              {propriedadeExcluindo?.nome_propriedade}
+            </strong>
+            ? Essa ação não poderá ser desfeita.
+          </>
+        }
+        textoConfirmar="Excluir"
+        textoCancelar="Cancelar"
+        onConfirmar={confirmarExclusao}
+        onCancelar={() => setPropriedadeExcluindo(null)}
+      />
 
       <TopBar
         breadcrumb="Gestão Agrícola"
@@ -86,13 +160,17 @@ export default function PropriedadesModule() {
           {ABAS.map((a) => (
             <button
               key={a.id}
-              onClick={() => setAba(a.id)}
+              onClick={() => {
+                if (a.id !== "novo") setPropriedadeEditando(null);
+                setAba(a.id);
+              }}
               className={`px-5 py-2.5 text-sm font-semibold border-b-2 transition-colors -mb-px
                 ${aba === a.id
                   ? "border-green-600 text-green-700"
                   : "border-transparent text-gray-400 hover:text-gray-600"}`}
             >
-              {a.icone} {a.label}
+              {a.icone}{" "}
+              {a.id === "novo" && propriedadeEditando ? "Editar Propriedade" : a.label}
             </button>
           ))}
         </div>
@@ -133,14 +211,23 @@ export default function PropriedadesModule() {
                 <PropriedadesLista
                   propriedades={propriedades}
                   onVerPropriedade={abrirPropriedade}
-                  onNovo={() => setAba("novo")}
+                  onNovo={() => {
+                    setPropriedadeEditando(null);
+                    setAba("novo");
+                  }}
+                  onEditar={editarPropriedade}
+                  onExcluir={excluir}
                 />
               ) : (
                 <PropriedadeForm
                   embedded
                   propriedadesExistentes={propriedades}
+                  propriedadeEdicao={propriedadeEditando}
                   onSaved={aposSalvar}
-                  onCancelar={() => setAba("lista")}
+                  onCancelar={() => {
+                    setPropriedadeEditando(null);
+                    setAba("lista");
+                  }}
                 />
               )}
             </>
