@@ -91,7 +91,33 @@ export async function getTalhoes(): Promise<Talhao[]> {
 
 export async function criarTalhao(dados: NovoTalhaoPayload): Promise<Talhao> {
   try {
-    const { data } = await api.post('/api/talhoes', dados);
+    // Resolve o id do tipo de solo a partir da descrição selecionada no form
+    let idTipoSolo: number | undefined;
+    try {
+      const { data: tipos } = await getTiposSolo();
+      idTipoSolo = tipos.find(
+        (t) => t.descricao.trim().toLowerCase() === dados.tipo_solo.trim().toLowerCase()
+      )?.id;
+    } catch {
+      /* segue sem id_tipo_solo; backend validará */
+    }
+
+    // Converte para o formato esperado pelo backend
+    const payload = {
+      nome_talhao: dados.nome,
+      codigo_talhao: dados.codigo,
+      id_propriedade: dados.id_propriedade,
+      area_total: dados.area_total,
+      area_utilizavel: dados.area_utilizavel,
+      status_inicial: dados.status,
+      id_tipo_solo: idTipoSolo,
+      topografia: dados.topografia,
+      observacoes: dados.observacoes,
+      latitude: dados.latitude,
+      longitude: dados.longitude,
+    };
+
+    const { data } = await api.post('/api/talhoes', payload);
     return mapTalhao(data);
   } catch {
     // Fallback local: gera um talhão "salvo" apenas em memória
