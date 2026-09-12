@@ -20,8 +20,31 @@ import Input from "../ui/Input";
 import Select from "../ui/Select";
 import SectionTitle from "../ui/SectionTitle";
 import MapaPropriedade from "../ui/MapaPropriedade";
+import InfoTooltip from "../ui/InfoTooltip";
+import Toast, { DadosToast } from "../ui/Toast";
+import FormActions from "../ui/FormActions";
 
-export default function PropriedadeForm() {
+/** Remove pontuação e padroniza para maiúsculas, permitindo comparar dois CARs */
+const normalizarCar = (valor: string) =>
+  valor.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+
+interface PropriedadeFormProps {
+  /** Renderiza apenas o formulário (sem TopBar/PageHeader) para uso dentro de um módulo */
+  embedded?: boolean;
+  /** Chamado após salvar com sucesso (recebe o nome da propriedade cadastrada) */
+  onSaved?: (nomePropriedade: string) => void;
+  /** Chamado ao cancelar */
+  onCancelar?: () => void;
+  /** Propriedades já cadastradas — usado para alertar sobre CAR duplicado antes de enviar */
+  propriedadesExistentes?: any[];
+}
+
+export default function PropriedadeForm({
+  embedded = false,
+  onSaved,
+  onCancelar,
+  propriedadesExistentes = [],
+}: PropriedadeFormProps) {
   const [estadoSelecionado, setEstadoSelecionado] = useState<string>("");
   const [cidadeSelecionada, setCidadeSelecionada] = useState<string>("");
   const [cep, setCep] = useState<string>("");
@@ -29,6 +52,9 @@ export default function PropriedadeForm() {
   const [cidadePendente, setCidadePendente] = useState<string>("");
   const [empresaSelecionada, setEmpresaSelecionada] = useState<string>("");
   const [nomePropriedade, setNomePropriedade] = useState<string>("");
+
+  // Notificação flutuante (sucesso/erro)
+  const [toast, setToast] = useState<DadosToast | null>(null);
 
   // Identificação legal
   const [car, setCar] = useState<string>("");
@@ -110,7 +136,11 @@ export default function PropriedadeForm() {
   const buscarCep = async () => {
     const cepLimpo = cep.replace(/\D/g, "");
     if (cepLimpo.length !== 8) {
-      alert("Por favor, digite um CEP válido com 8 números.");
+      setToast({
+        tipo: "erro",
+        titulo: "CEP inválido",
+        descricao: "Digite um CEP válido com 8 números.",
+      });
       return;
     }
 
@@ -119,7 +149,11 @@ export default function PropriedadeForm() {
       const data = await response.json();
 
       if (data.erro) {
-        alert("CEP não encontrado.");
+        setToast({
+          tipo: "erro",
+          titulo: "CEP não encontrado",
+          descricao: "Verifique o CEP informado e tente novamente.",
+        });
         return;
       }
 
@@ -132,7 +166,11 @@ export default function PropriedadeForm() {
       }
     } catch (error) {
       console.error("Erro ao buscar CEP:", error);
-      alert("Erro ao conectar com o ViaCEP.");
+      setToast({
+        tipo: "erro",
+        titulo: "Erro ao buscar o CEP",
+        descricao: "Não foi possível conectar ao ViaCEP. Tente novamente.",
+      });
     }
   };
 
@@ -167,18 +205,36 @@ export default function PropriedadeForm() {
     mutationFn: async (dados: NovaPropriedadePayload) =>
       (await criarPropriedade(dados)).data,
     onSuccess: (resposta) => {
-      alert(
-        `✅ ${resposta.message}\n\nPropriedade: ${resposta.nome_propriedade}\nID: ${resposta.id_propriedade}`
-      );
-      limparFormulario();
+      if (embedded) {
+        // O módulo exibe a notificação de sucesso e redireciona para a listagem
+        onSaved?.(resposta.nome_propriedade);
+      } else {
+        setToast({
+          tipo: "sucesso",
+          titulo: "Propriedade cadastrada com sucesso!",
+          descricao: `${resposta.nome_propriedade} já está disponível na sua lista de propriedades.`,
+        });
+        limparFormulario();
+      }
     },
     onError: (erro: any) => {
-      const msg =
-        erro?.response?.data?.message ||
+      const msg: string =
+        erro?.response?.data?.error ||
         erro?.response?.data?.erro ||
+        erro?.response?.data?.message ||
         erro?.message ||
-        "Erro desconhecido ao cadastrar a propriedade.";
-      alert(`❌ Não foi possível salvar a propriedade.\n\n${msg}`);
+        "Verifique os dados informados e a conexão, depois tente novamente.";
+      const carDuplicado =
+        erro?.response?.status === 400 && /car/i.test(msg ?? "");
+      setToast({
+        tipo: "erro",
+        titulo: carDuplicado
+          ? "CAR já cadastrado"
+          : "Não foi possível salvar a propriedade",
+        descricao: carDuplicado
+          ? "Já existe uma propriedade registrada com este CAR. Verifique o número ou consulte a listagem de propriedades."
+          : msg,
+      });
     },
   });
 
@@ -211,19 +267,51 @@ export default function PropriedadeForm() {
   const handleSalvar = () => {
     // Validações mínimas dos campos obrigatórios
     if (!empresaSelecionada) {
-      alert("⚠️ Selecione a Empresa Agrícola vinculada.");
+      setToast({
+        tipo: "erro",
+        titulo: "Campo obrigatório",
+        descricao: "Selecione a Empresa Agrícola vinculada.",
+      });
       return;
     }
     if (!nomePropriedade.trim()) {
-      alert("⚠️ Informe o Nome da Propriedade.");
+      setToast({
+        tipo: "erro",
+        titulo: "Campo obrigatório",
+        descricao: "Informe o Nome da Propriedade.",
+      });
       return;
     }
     if (!car.trim()) {
-      alert("⚠️ Informe o CAR (Cadastro Ambiental Rural).");
+      setToast({
+        tipo: "erro",
+        titulo: "Campo obrigatório",
+        descricao: "Informe o CAR (Cadastro Ambiental Rural).",
+      });
       return;
     }
     if (latitude === "" || longitude === "") {
-      alert("⚠️ Defina a localização no mapa (Latitude/Longitude).");
+      setToast({
+        tipo: "erro",
+        titulo: "Localização não definida",
+        descricao: "Defina a localização no mapa (Latitude/Longitude).",
+      });
+      return;
+    }
+
+    // Não permite cadastrar uma propriedade com CAR já existente
+    const carNormalizado = normalizarCar(car);
+    const carJaExiste = propriedadesExistentes.some(
+      (p) => p.car && normalizarCar(String(p.car)) === carNormalizado
+    );
+    if (carJaExiste) {
+      setToast({
+        tipo: "erro",
+        titulo: "CAR já cadastrado",
+        descricao:
+          "Já existe uma propriedade registrada com este CAR. Verifique o número ou consulte a listagem de propriedades.",
+      });
+      window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
 
@@ -267,15 +355,34 @@ export default function PropriedadeForm() {
     }
   }, [cidades, cidadePendente]);
 
+  const Container: React.FC<{ children: React.ReactNode }> = embedded
+    ? ({ children }) => (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 lg:p-8 mt-4">
+          {children}
+          <FormActions
+            onCancel={onCancelar ?? (() => console.log("Ação de cancelar"))}
+            onSave={handleSalvar}
+            saveLabel={salvando ? "Salvando..." : "Salvar Propriedade"}
+          />
+        </div>
+      )
+    : ({ children }) => (
+        <FormWrapper
+          breadcrumb="Propriedades"
+          page="Nova Propriedade"
+          title="Cadastro de Propriedade"
+          description="Preencha as informações da propriedade rural."
+          saveLabel={salvando ? "Salvando..." : "Salvar Propriedade"}
+          onSave={handleSalvar}
+          onCancel={onCancelar}
+        >
+          {children}
+        </FormWrapper>
+      );
+
   return (
-    <FormWrapper
-      breadcrumb="Propriedades"
-      page="Nova Propriedade"
-      title="Cadastro de Propriedade"
-      description="Preencha as informações da propriedade rural."
-      saveLabel={salvando ? "Salvando..." : "Salvar Propriedade"}
-      onSave={handleSalvar}
-    >
+    <Container>
+      {toast && <Toast {...toast} onFechar={() => setToast(null)} />}
       <FormSection title="Vinculação" cols={2}>
         <Field label="Empresa Agrícola" required>
           <Select
@@ -322,8 +429,11 @@ export default function PropriedadeForm() {
               value={car}
               onChange={(e) => setCar(e.target.value)}
             />
-            <span className="absolute right-2 top-2 text-gray-400 text-xs cursor-help">
-              ⓘ
+            <span className="absolute right-2 top-2">
+              <InfoTooltip
+                titulo="CAR — Cadastro Ambiental Rural"
+                descricao="Identifica e registra informações ambientais da propriedade rural, como área, APP, Reserva Legal e áreas de uso consolidado."
+              />
             </span>
           </div>
         </Field>
@@ -334,8 +444,11 @@ export default function PropriedadeForm() {
               value={ccir}
               onChange={(e) => setCcir(e.target.value)}
             />
-            <span className="absolute right-2 top-2 text-gray-400 text-xs cursor-help">
-              ⓘ
+            <span className="absolute right-2 top-2">
+              <InfoTooltip
+                titulo="CCIR — Certificado de Cadastro de Imóvel Rural"
+                descricao="Comprova que o imóvel está cadastrado no INCRA. É usado em operações envolvendo o imóvel rural, como compra e venda, desmembramento e financiamento."
+              />
             </span>
           </div>
         </Field>
@@ -346,8 +459,11 @@ export default function PropriedadeForm() {
               value={nirf}
               onChange={(e) => setNirf(e.target.value)}
             />
-            <span className="absolute right-2 top-2 text-gray-400 text-xs cursor-help">
-              ⓘ
+            <span className="absolute right-2 top-2">
+              <InfoTooltip
+                titulo="NIRF — Número do Imóvel na Receita Federal"
+                descricao="Identificador fiscal do imóvel rural perante a Receita Federal, para fins tributários. Atualmente tratado no CAFIR/CIB, conforme o contexto e a atualização cadastral."
+              />
             </span>
           </div>
         </Field>
@@ -556,6 +672,6 @@ export default function PropriedadeForm() {
           </div>
         </Field>
       </div>
-    </FormWrapper>
+    </Container>
   );
 }
