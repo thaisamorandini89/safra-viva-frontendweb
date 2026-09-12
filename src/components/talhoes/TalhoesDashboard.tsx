@@ -329,7 +329,7 @@ export default function TalhoesDashboard({ talhoes, onVerTalhao }: Props) {
             const base = t.area_utilizavel || t.area_total;
             const maiorArea = Math.max(...talhoes.map((x) => x.area_total), 1);
             const escala = 90 + (t.area_total / maiorArea) * 110;
-            const meta = STATUS_META[t.status];
+            const meta = STATUS_META[t.status] ?? STATUS_META["Livre"];
             const pct = base ? (areaOcupada(t) / base) * 100 : 0;
             return (
               <button

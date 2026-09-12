@@ -3,11 +3,15 @@ import Sidebar from "./components/layout/Sidebar";
 import EmpresaForm from "./components/forms/EmpresaForm";
 import PropriedadeForm from "./components/forms/PropriedadeForm";
 import TalhoesModule from "./components/talhoes/TalhoesModule";
+import AtividadesModule from "./components/atividades/AtividadesModule";
+import InsumosModule from "./components/insumos/InsumosModule";
 
 const TABS = [
   { label: "Empresa Agrícola", icon: "🏢" },
   { label: "Propriedade", icon: "🌿" },
   { label: "Talhões", icon: "🗂️" },
+  { label: "Atividades", icon: "🚜" },
+  { label: "Insumos", icon: "📦" },
 ];
 
 export default function App() {
@@ -40,6 +44,8 @@ export default function App() {
         {tab === 0 && <EmpresaForm />}
         {tab === 1 && <PropriedadeForm />}
         {tab === 2 && <TalhoesModule />}
+        {tab === 3 && <AtividadesModule />}
+        {tab === 4 && <InsumosModule />}
       </div>
     </div>
   );
