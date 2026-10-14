@@ -5,6 +5,7 @@ import PropriedadesModule from "./components/propriedades/PropriedadesModule";
 import TalhoesModule from "./components/talhoes/TalhoesModule";
 import AtividadesModule from "./components/atividades/AtividadesModule";
 import InsumosModule from "./components/insumos/InsumosModule";
+import FinanceiroModule from "./components/financeiro/FinanceiroModule";
 
 const TABS = [
   { label: "Empresa Agrícola", icon: "🏢" },
@@ -12,6 +13,7 @@ const TABS = [
   { label: "Talhões", icon: "🗂️" },
   { label: "Atividades", icon: "🚜" },
   { label: "Insumos", icon: "📦" },
+  { label: "Financeiro", icon: "💰" },
 ];
 
 export default function App() {
@@ -46,6 +48,7 @@ export default function App() {
         {tab === 2 && <TalhoesModule />}
         {tab === 3 && <AtividadesModule />}
         {tab === 4 && <InsumosModule />}
+        {tab === 5 && <FinanceiroModule />}
       </div>
     </div>
   );

@@ -6,7 +6,8 @@ import {
   getCidadesPorEstado, 
   getTiposSolo, // <-- Importação da nova função da API
   getClassesUso, // <-- Classes de Capacidade de Uso
-  criarPropriedade // <-- Cadastro de propriedade
+  criarPropriedade, // <-- Cadastro de propriedade
+  atualizarPropriedade // <-- Atualização de propriedade
 } from "../../services/api";
 import { Estado, Cidade } from "../../types/geo"; 
 import { TipoSolo } from "../../types/tipoSolo";
@@ -37,6 +38,8 @@ interface PropriedadeFormProps {
   onCancelar?: () => void;
   /** Propriedades já cadastradas — usado para alertar sobre CAR duplicado antes de enviar */
   propriedadesExistentes?: any[];
+  /** Quando informado, o formulário entra em modo de edição pré-preenchido */
+  propriedadeEdicao?: any | null;
 }
 
 export default function PropriedadeForm({
@@ -44,7 +47,9 @@ export default function PropriedadeForm({
   onSaved,
   onCancelar,
   propriedadesExistentes = [],
+  propriedadeEdicao = null,
 }: PropriedadeFormProps) {
+  const modoEdicao = propriedadeEdicao != null;
   const [estadoSelecionado, setEstadoSelecionado] = useState<string>("");
   const [cidadeSelecionada, setCidadeSelecionada] = useState<string>("");
   const [cep, setCep] = useState<string>("");
@@ -82,6 +87,57 @@ export default function PropriedadeForm({
   // <-- Novo estado para a Classe de Capacidade de Uso
   const [classeUsoSelecionada, setClasseUsoSelecionada] = useState<string>("");
   const [observacoes, setObservacoes] = useState<string>("");
+
+  // Pré-preenche o formulário quando em modo de edição
+  useEffect(() => {
+    if (!propriedadeEdicao) return;
+    setEmpresaSelecionada(
+      propriedadeEdicao.id_empresa ? String(propriedadeEdicao.id_empresa) : ""
+    );
+    setNomePropriedade(propriedadeEdicao.nome_propriedade ?? "");
+    setCar(propriedadeEdicao.car ?? "");
+    setCcir(propriedadeEdicao.ccir ?? "");
+    setNirf(propriedadeEdicao.nirf ?? "");
+    setLatitude(
+      propriedadeEdicao.latitude != null ? String(propriedadeEdicao.latitude) : ""
+    );
+    setLongitude(
+      propriedadeEdicao.longitude != null ? String(propriedadeEdicao.longitude) : ""
+    );
+    setAreaTotal(propriedadeEdicao.area_total != null ? String(propriedadeEdicao.area_total) : "");
+    setAreaAgricultavel(
+      propriedadeEdicao.area_agricultavel != null
+        ? String(propriedadeEdicao.area_agricultavel)
+        : ""
+    );
+    setAreaPreservacao(
+      propriedadeEdicao.area_preservacao != null
+        ? String(propriedadeEdicao.area_preservacao)
+        : ""
+    );
+    setAreaPastagem(
+      propriedadeEdicao.area_pastagem != null ? String(propriedadeEdicao.area_pastagem) : ""
+    );
+    setAreaVegetacaoNativa(
+      propriedadeEdicao.area_vegetacao_nativa != null
+        ? String(propriedadeEdicao.area_vegetacao_nativa)
+        : ""
+    );
+    setAltitudeMedia(
+      propriedadeEdicao.altitude_media != null
+        ? String(propriedadeEdicao.altitude_media)
+        : ""
+    );
+    setTipoSoloSelecionado(
+      propriedadeEdicao.id_tipo_solo ? String(propriedadeEdicao.id_tipo_solo) : ""
+    );
+    setClasseUsoSelecionada(
+      propriedadeEdicao.id_classe_capacidade_uso
+        ? String(propriedadeEdicao.id_classe_capacidade_uso)
+        : ""
+    );
+    setObservacoes(propriedadeEdicao.observacoes ?? "");
+  }, [propriedadeEdicao]);
 
   // Queries para dados geográficos
   const { data: estados = [] } = useQuery({
@@ -238,6 +294,39 @@ export default function PropriedadeForm({
     },
   });
 
+  // Mutation para atualizar a propriedade no backend
+  const {
+    mutate: editarPropriedade,
+    isPending: editando,
+  } = useMutation({
+    mutationFn: async ({ id, dados }: { id: number; dados: any }) =>
+      (await atualizarPropriedade(id, dados)).data,
+    onSuccess: () => {
+      const nome = nomePropriedade;
+      if (embedded) {
+        onSaved?.(nome);
+      } else {
+        setToast({
+          tipo: "sucesso",
+          titulo: "Propriedade atualizada com sucesso!",
+          descricao: `As alterações de ${nome} foram salvas.`,
+        });
+      }
+    },
+    onError: (erro: any) => {
+      const msg: string =
+        erro?.response?.data?.error ||
+        erro?.response?.data?.erro ||
+        erro?.response?.data?.message ||
+        "Verifique os dados informados e tente novamente.";
+      setToast({
+        tipo: "erro",
+        titulo: "Não foi possível atualizar a propriedade",
+        descricao: msg,
+      });
+    },
+  });
+
   // Limpa todos os campos após um cadastro bem-sucedido
   const limparFormulario = () => {
     setEmpresaSelecionada("");
@@ -299,10 +388,13 @@ export default function PropriedadeForm({
       return;
     }
 
-    // Não permite cadastrar uma propriedade com CAR já existente
+    // Não permite registrar uma propriedade com CAR já existente (ignora a própria em edição)
     const carNormalizado = normalizarCar(car);
     const carJaExiste = propriedadesExistentes.some(
-      (p) => p.car && normalizarCar(String(p.car)) === carNormalizado
+      (p) =>
+        p.car &&
+        normalizarCar(String(p.car)) === carNormalizado &&
+        Number(p.id_propriedade) !== Number(propriedadeEdicao?.id_propriedade)
     );
     if (carJaExiste) {
       setToast({
@@ -331,11 +423,20 @@ export default function PropriedadeForm({
     if (areaTotal.trim()) payload.area_total = areaTotal.trim();
     if (areaAgricultavel.trim()) payload.area_agricultavel = areaAgricultavel.trim();
     if (areaPreservacao.trim()) payload.area_preservacao = areaPreservacao.trim();
+    if (areaPastagem.trim()) payload.area_pastagem = areaPastagem.trim();
+    if (areaVegetacaoNativa.trim()) payload.area_vegetacao_nativa = areaVegetacaoNativa.trim();
+    if (altitudeMedia.trim()) payload.altitude_media = altitudeMedia.trim();
+    if (pontoReferencia.trim()) payload.ponto_referencia = pontoReferencia.trim();
+    if (observacoes.trim()) payload.observacoes = observacoes.trim();
     if (tipoSoloSelecionado) payload.id_tipo_solo = Number(tipoSoloSelecionado);
     if (classeUsoSelecionada)
       payload.id_classe_capacidade_uso = Number(classeUsoSelecionada);
 
-    salvarPropriedade(payload);
+    if (modoEdicao && propriedadeEdicao) {
+      editarPropriedade({ id: Number(propriedadeEdicao.id_propriedade), dados: payload });
+    } else {
+      salvarPropriedade(payload);
+    }
   };
 
   useEffect(() => {
@@ -355,6 +456,13 @@ export default function PropriedadeForm({
     }
   }, [cidades, cidadePendente]);
 
+  const salvandoOuEditando = salvando || editando;
+  const rotuloSalvar = salvandoOuEditando
+    ? "Salvando..."
+    : modoEdicao
+    ? "Salvar alterações"
+    : "Salvar Propriedade";
+
   const Container: React.FC<{ children: React.ReactNode }> = embedded
     ? ({ children }) => (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 lg:p-8 mt-4">
@@ -362,17 +470,17 @@ export default function PropriedadeForm({
           <FormActions
             onCancel={onCancelar ?? (() => console.log("Ação de cancelar"))}
             onSave={handleSalvar}
-            saveLabel={salvando ? "Salvando..." : "Salvar Propriedade"}
+            saveLabel={rotuloSalvar}
           />
         </div>
       )
     : ({ children }) => (
         <FormWrapper
           breadcrumb="Propriedades"
-          page="Nova Propriedade"
-          title="Cadastro de Propriedade"
+          page={modoEdicao ? "Editar Propriedade" : "Nova Propriedade"}
+          title={modoEdicao ? "Editar Propriedade" : "Cadastro de Propriedade"}
           description="Preencha as informações da propriedade rural."
-          saveLabel={salvando ? "Salvando..." : "Salvar Propriedade"}
+          saveLabel={rotuloSalvar}
           onSave={handleSalvar}
           onCancel={onCancelar}
         >
@@ -383,6 +491,15 @@ export default function PropriedadeForm({
   return (
     <Container>
       {toast && <Toast {...toast} onFechar={() => setToast(null)} />}
+      {modoEdicao && (
+        <div className="mb-5 rounded-lg border border-sky-200 bg-sky-50 p-4">
+          <p className="text-sm text-sky-800 flex items-center gap-2">
+            <span aria-hidden>ℹ️</span>
+            Você está editando uma propriedade. O endereço não é recarregado — preencha
+            os campos de localização apenas se desejar atualizá-los.
+          </p>
+        </div>
+      )}
       <FormSection title="Vinculação" cols={2}>
         <Field label="Empresa Agrícola" required>
           <Select

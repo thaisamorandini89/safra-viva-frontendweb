@@ -6,6 +6,8 @@ interface Props {
   propriedades: any[];
   onVerPropriedade: (p: any) => void;
   onNovo: () => void;
+  onEditar: (p: any) => void;
+  onExcluir: (p: any) => void;
 }
 
 type Coluna = "nome" | "empresa" | "area_total" | "area_agricultavel" | "solo";
@@ -14,6 +16,8 @@ export default function PropriedadesLista({
   propriedades,
   onVerPropriedade,
   onNovo,
+  onEditar,
+  onExcluir,
 }: Props) {
   const [busca, setBusca] = useState("");
   const [empresa, setEmpresa] = useState("todas");
@@ -274,6 +278,26 @@ export default function PropriedadesLista({
                       className="px-2 py-1 rounded hover:bg-green-100 text-gray-500 hover:text-green-700 transition"
                     >
                       👁️
+                    </button>
+                    <button
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        onEditar(p);
+                      }}
+                      title="Editar"
+                      className="px-2 py-1 rounded hover:bg-sky-100 text-gray-500 hover:text-sky-700 transition"
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        onExcluir(p);
+                      }}
+                      title="Excluir"
+                      className="px-2 py-1 rounded hover:bg-red-100 text-gray-500 hover:text-red-600 transition"
+                    >
+                      🗑️
                     </button>
                   </td>
                 </tr>
