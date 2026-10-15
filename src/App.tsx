@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import Sidebar from "./components/layout/Sidebar";
 import EmpresasModule from "./components/empresas/EmpresasModule";
 import PropriedadesModule from "./components/propriedades/PropriedadesModule";
@@ -7,6 +7,10 @@ import AtividadesModule from "./components/atividades/AtividadesModule";
 import InsumosModule from "./components/insumos/InsumosModule";
 import FinanceiroModule from "./components/financeiro/FinanceiroModule";
 
+const RelatoriosModule = lazy(
+  () => import("./components/relatorios/RelatoriosModule")
+);
+
 const TABS = [
   { label: "Empresa Agrícola", icon: "🏢" },
   { label: "Propriedade", icon: "🌿" },
@@ -14,6 +18,7 @@ const TABS = [
   { label: "Atividades", icon: "🚜" },
   { label: "Insumos", icon: "📦" },
   { label: "Financeiro", icon: "💰" },
+  { label: "Relatórios", icon: "📊" },
 ];
 
 export default function App() {
@@ -28,12 +33,12 @@ export default function App() {
 
       <div className="flex-1 flex flex-col min-w-0">
         {/* Tab switcher */}
-        <div className="flex bg-white border-b border-gray-200 px-6 pt-3">
+        <div className="flex overflow-x-auto bg-white border-b border-gray-200 px-6 pt-3 print:hidden">
           {TABS.map((t, i) => (
             <button
               key={t.label}
               onClick={() => setTab(i)}
-              className={`px-5 py-2.5 text-sm font-semibold border-b-2 transition-colors -mb-px
+              className={`shrink-0 px-5 py-2.5 text-sm font-semibold border-b-2 transition-colors -mb-px
                 ${tab === i
                   ? "border-green-600 text-green-700"
                   : "border-transparent text-gray-400 hover:text-gray-600"}`}
@@ -49,6 +54,17 @@ export default function App() {
         {tab === 3 && <AtividadesModule />}
         {tab === 4 && <InsumosModule />}
         {tab === 5 && <FinanceiroModule />}
+        {tab === 6 && (
+          <Suspense
+            fallback={
+              <div className="flex-1 p-10 text-center text-sm text-gray-400">
+                Carregando relatórios...
+              </div>
+            }
+          >
+            <RelatoriosModule />
+          </Suspense>
+        )}
       </div>
     </div>
   );
