@@ -5,6 +5,8 @@ import { AtividadeAgricola, NovaAtividadePayload } from "../../types/atividade";
 import { colors } from "../../theme";
 import TopBar from "../layout/TopBar";
 import PageHeader from "../ui/PageHeader";
+import Toast, { DadosToast } from "../ui/Toast";
+import ConfirmDialog from "../ui/ConfirmDialog";
 import AtividadesDashboard from "./AtividadesDashboard";
 import AtividadesLista from "./AtividadesLista";
 import AtividadeForm from "./AtividadeForm";
@@ -21,6 +23,9 @@ const ABAS: { id: Aba; icone: string; label: string }[] = [
 export default function AtividadesModule() {
   const [aba, setAba] = useState<Aba>("dashboard");
   const [selecionada, setSelecionada] = useState<AtividadeAgricola | null>(null);
+  const [atividadeEditando, setAtividadeEditando] = useState<AtividadeAgricola | null>(null);
+  const [atividadeExcluindo, setAtividadeExcluindo] = useState<AtividadeAgricola | null>(null);
+  const [toast, setToast] = useState<DadosToast | null>(null);
   const queryClient = useQueryClient();
 
   const {
@@ -39,17 +44,67 @@ export default function AtividadesModule() {
         ...antigas,
         nova,
       ]);
-      alert(`✅ Atividade "${nova.tipo_atividade}" registrada com sucesso!`);
+      setToast({
+        tipo: "sucesso",
+        titulo: "Atividade registrada com sucesso!",
+        descricao: `${nova.tipo_atividade} já aparece na sua listagem de atividades.`,
+      });
       setAba("lista");
     },
     onError: (erro: any) => {
-      alert(
-        `❌ Não foi possível salvar a atividade.\n\n${
-          erro?.response?.data?.message ?? erro?.message ?? "Erro desconhecido."
-        }`
-      );
+      setToast({
+        tipo: "erro",
+        titulo: "Não foi possível salvar a atividade",
+        descricao:
+          erro?.response?.data?.message ??
+          erro?.message ??
+          "Verifique os dados informados e tente novamente.",
+      });
     },
   });
+
+  // Recebe o payload do formulário e decide entre criar ou atualizar
+  const handleSalvarForm = (dados: NovaAtividadePayload) => {
+    if (atividadeEditando) {
+      const atualizada: AtividadeAgricola = { ...atividadeEditando, ...dados };
+      queryClient.setQueryData<AtividadeAgricola[]>(["atividades"], (antigas = []) =>
+        antigas.map((a) => (a.id === atividadeEditando.id ? atualizada : a))
+      );
+      setToast({
+        tipo: "sucesso",
+        titulo: "Atividade atualizada com sucesso!",
+        descricao: `As alterações de ${atualizada.tipo_atividade} foram salvas.`,
+      });
+      setAtividadeEditando(null);
+      setAba("lista");
+    } else {
+      salvar(dados);
+    }
+  };
+
+  const editarAtividade = (a: AtividadeAgricola) => {
+    setAtividadeEditando(a);
+    setSelecionada(null);
+    setAba("nova");
+  };
+
+  // Abre o modal de confirmação de exclusão
+  const excluir = (a: AtividadeAgricola) => setAtividadeExcluindo(a);
+
+  // Confirma e remove a atividade da listagem
+  const confirmarExclusao = () => {
+    if (!atividadeExcluindo) return;
+    const nome = atividadeExcluindo.tipo_atividade;
+    queryClient.setQueryData<AtividadeAgricola[]>(["atividades"], (antigas = []) =>
+      antigas.filter((a) => a.id !== atividadeExcluindo.id)
+    );
+    setToast({
+      tipo: "sucesso",
+      titulo: "Atividade excluída",
+      descricao: `${nome} foi removida com sucesso.`,
+    });
+    setAtividadeExcluindo(null);
+  };
 
   const cabecalho = selecionada
     ? {
@@ -68,12 +123,34 @@ export default function AtividadesModule() {
         descricao: "Consulte, filtre e exporte o histórico operacional das safras",
       }
     : {
-        titulo: "Cadastro de Atividade",
-        descricao: "Registre uma nova operação agrícola vinculada a um talhão",
+        titulo: atividadeEditando ? "Editar Atividade" : "Cadastro de Atividade",
+        descricao: atividadeEditando
+          ? `Atualize os dados da atividade ${atividadeEditando.tipo_atividade}`
+          : "Registre uma nova operação agrícola vinculada a um talhão",
       };
 
   return (
     <div className={`flex-1 overflow-auto ${colors.background.app}`}>
+      {toast && <Toast {...toast} onFechar={() => setToast(null)} />}
+
+      <ConfirmDialog
+        aberto={atividadeExcluindo != null}
+        tipo="perigo"
+        titulo="Excluir atividade"
+        mensagem={
+          <>
+            Tem certeza que deseja excluir a atividade{" "}
+            <strong className="text-gray-700">
+              {atividadeExcluindo?.tipo_atividade}
+            </strong>
+            ? Essa ação não poderá ser desfeita.
+          </>
+        }
+        textoConfirmar="Excluir"
+        textoCancelar="Cancelar"
+        onConfirmar={confirmarExclusao}
+        onCancelar={() => setAtividadeExcluindo(null)}
+      />
       <TopBar
         breadcrumb="Gestão Agrícola"
         page={selecionada ? `Atividades › ${selecionada.tipo_atividade}` : "Atividades"}
@@ -84,13 +161,17 @@ export default function AtividadesModule() {
           {ABAS.map((a) => (
             <button
               key={a.id}
-              onClick={() => setAba(a.id)}
+              onClick={() => {
+                if (a.id !== "nova") setAtividadeEditando(null);
+                setAba(a.id);
+              }}
               className={`px-5 py-2.5 text-sm font-semibold border-b-2 transition-colors -mb-px
                 ${aba === a.id
                   ? "border-green-600 text-green-700"
                   : "border-transparent text-gray-400 hover:text-gray-600"}`}
             >
-              {a.icone} {a.label}
+              {a.icone}{" "}
+              {a.id === "nova" && atividadeEditando ? "Editar Atividade" : a.label}
             </button>
           ))}
         </div>
@@ -131,14 +212,23 @@ export default function AtividadesModule() {
                 <AtividadesLista
                   atividades={atividades}
                   onVerAtividade={setSelecionada}
-                  onNova={() => setAba("nova")}
+                  onNova={() => {
+                    setAtividadeEditando(null);
+                    setAba("nova");
+                  }}
+                  onEditar={editarAtividade}
+                  onExcluir={excluir}
                 />
               ) : (
                 <AtividadeForm
                   atividades={atividades}
                   salvando={salvando}
-                  onCancelar={() => setAba("lista")}
-                  onSalvar={(dados) => salvar(dados)}
+                  atividadeEdicao={atividadeEditando}
+                  onCancelar={() => {
+                    setAtividadeEditando(null);
+                    setAba("lista");
+                  }}
+                  onSalvar={handleSalvarForm}
                 />
               )}
             </>

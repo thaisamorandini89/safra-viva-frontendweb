@@ -21,11 +21,13 @@ interface Props {
   atividades: AtividadeAgricola[];
   onVerAtividade: (a: AtividadeAgricola) => void;
   onNova: () => void;
+  onEditar: (a: AtividadeAgricola) => void;
+  onExcluir: (a: AtividadeAgricola) => void;
 }
 
 type Coluna = "tipo" | "talhao" | "responsavel" | "data_inicio" | "custo" | "status";
 
-export default function AtividadesLista({ atividades, onVerAtividade, onNova }: Props) {
+export default function AtividadesLista({ atividades, onVerAtividade, onNova, onEditar, onExcluir }: Props) {
   const [busca, setBusca] = useState("");
   const [categoria, setCategoria] = useState<"todas" | CategoriaAtividade>("todas");
   const [tipo, setTipo] = useState("todos");
@@ -359,6 +361,26 @@ export default function AtividadesLista({ atividades, onVerAtividade, onNova }: 
                         className="px-2 py-1 rounded hover:bg-green-100 text-gray-500 hover:text-green-700 transition"
                       >
                         👁️
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEditar(a);
+                        }}
+                        title="Editar"
+                        className="px-2 py-1 rounded hover:bg-sky-100 text-gray-500 hover:text-sky-700 transition"
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onExcluir(a);
+                        }}
+                        title="Excluir"
+                        className="px-2 py-1 rounded hover:bg-red-100 text-gray-500 hover:text-red-600 transition"
+                      >
+                        🗑️
                       </button>
                     </td>
                   </tr>
