@@ -14,7 +14,7 @@ const navItems: NavItem[] = [
   { icon: "🚜", label: "Atividades", tab: 3 },
   { icon: "💰", label: "Financeiro", tab: 5 },
   { icon: "📦", label: "Insumos", tab: 4 },
-  { icon: "📊", label: "Relatórios" },
+  { icon: "📊", label: "Relatórios", tab: 6 },
   { icon: "🗺️", label: "Mapa" },
   { icon: "⚙️", label: "Configurações" },
 ];
@@ -26,7 +26,7 @@ interface SidebarProps {
 
 export default function Sidebar({ activeTab, onTabChange }: SidebarProps) {
   return (
-    <aside className="w-52 min-h-screen bg-green-900 flex flex-col py-4 shrink-0">
+    <aside className="w-52 min-h-screen bg-green-900 flex flex-col py-4 shrink-0 print:hidden">
       <div className="px-4 mb-8">
         <Logo />
       </div>
