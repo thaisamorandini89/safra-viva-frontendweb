@@ -227,6 +227,7 @@ export default function RelatoriosModule() {
   const [erroFiltros, setErroFiltros] = useState("");
   const [erroExportacao, setErroExportacao] = useState("");
   const [statusExportacao, setStatusExportacao] = useState("");
+  const [pdfPendente, setPdfPendente] = useState(false);
 
   // Pré-carrega as bibliotecas de exportação para que o clique dispare o
   // download de imediato, sem esperar o import dinâmico (o que poderia fazer o
@@ -1021,6 +1022,7 @@ export default function RelatoriosModule() {
     setPagina(1);
     setErroExportacao("");
     setStatusExportacao("");
+    setPdfPendente(true);
   };
 
   const nomeArquivo = `safraviva-${relatorio}-${hoje}`;
@@ -1168,6 +1170,15 @@ export default function RelatoriosModule() {
       setStatusExportacao("");
     }
   };
+
+  // Ao clicar em "Gerar relatório" os filtros são aplicados e a tabela é
+  // recalculada no próximo render. Este efeito aguarda esse recálculo para
+  // então exportar o PDF já com os dados filtrados.
+  useEffect(() => {
+    if (!pdfPendente) return;
+    setPdfPendente(false);
+    void exportarPdf();
+  }, [pdfPendente, filtrosAplicados]);
 
   return (
     <div className="flex-1 overflow-auto bg-gray-50">
