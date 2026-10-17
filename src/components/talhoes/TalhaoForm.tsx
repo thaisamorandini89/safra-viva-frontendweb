@@ -347,8 +347,8 @@ export default function TalhaoForm({
 
       {/* -------------------------------------------------------- Localização */}
       <SectionTitle>Localização</SectionTitle>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <div className="space-y-4">
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <Field label="Latitude">
             <Input
               value={latitude}
@@ -363,6 +363,8 @@ export default function TalhaoForm({
               placeholder="-55.72000000"
             />
           </Field>
+        </div>
+        <div className="flex items-center justify-between gap-3">
           <p className="text-xs text-gray-400 leading-relaxed">
             💡 Clique no mapa para capturar automaticamente as coordenadas do
             centro do talhão.
@@ -374,14 +376,14 @@ export default function TalhaoForm({
                 setLatitude("");
                 setLongitude("");
               }}
-              className="text-xs text-red-600 hover:underline"
+              className="shrink-0 text-xs text-red-600 hover:underline"
             >
               Limpar coordenadas
             </button>
           )}
         </div>
 
-        <div className="lg:col-span-2 h-[320px] rounded-lg overflow-hidden border border-gray-200">
+        <div className="h-[320px] rounded-lg overflow-hidden border border-gray-200">
           <MapaPropriedade
             posicao={posicaoMapa}
             onSelecionar={handleSelecionarNoMapa}

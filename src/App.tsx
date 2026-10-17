@@ -7,6 +7,8 @@ import TalhoesModule from "./components/talhoes/TalhoesModule";
 import AtividadesModule from "./components/atividades/AtividadesModule";
 import InsumosModule from "./components/insumos/InsumosModule";
 import FinanceiroModule from "./components/financeiro/FinanceiroModule";
+import { useAuth } from "./components/auth/AuthProvider";
+import LoginPage from "./components/auth/LoginPage";
 
 const RelatoriosModule = lazy(
   () => import("./components/relatorios/RelatoriosModule")
@@ -30,7 +32,10 @@ const CONFIG_TAB = 8;
 const SEM_BARRA = [INICIO_TAB, CONFIG_TAB];
 
 export default function App() {
+  const { usuario } = useAuth();
   const [tab, setTab] = useState(INICIO_TAB);
+
+  if (!usuario) return <LoginPage />;
 
   return (
     <div
