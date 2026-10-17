@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getTiposSolo } from "../../services/api";
+import { getTiposSolo, getPropriedadesLista } from "../../services/api";
 import { TipoSolo } from "../../types/tipoSolo";
 import {
   Talhao,
@@ -66,14 +66,37 @@ export default function TalhaoForm({
   );
   const [erros, setErros] = useState<Record<string, string>>({});
 
-  // Propriedades derivadas dos talhões já carregados
+  // Lista completa de propriedades cadastradas (fonte oficial para o seletor)
+  const { data: propriedadesApi = [] } = useQuery({
+    queryKey: ["propriedadesLista"],
+    queryFn: getPropriedadesLista,
+  });
+
+  // Monta as opções do seletor a partir das propriedades reais.
+  // Faz fallback para as propriedades derivadas dos talhões caso a API não
+  // responda, garantindo que a edição não perca a propriedade já vinculada.
   const propriedades = useMemo(() => {
     const mapa = new Map<number, string>();
-    talhoes.forEach((t) =>
-      mapa.set(t.id_propriedade, t.nome_propriedade ?? `Propriedade ${t.id_propriedade}`)
-    );
+
+    propriedadesApi.forEach((p: any) => {
+      const id = Number(p.id_propriedade ?? p.id);
+      if (!isNaN(id) && id > 0) {
+        mapa.set(id, p.nome_propriedade ?? p.nome ?? `Propriedade ${id}`);
+      }
+    });
+
+    // Garante que a propriedade do talhão em edição esteja presente
+    talhoes.forEach((t) => {
+      if (!mapa.has(t.id_propriedade)) {
+        mapa.set(
+          t.id_propriedade,
+          t.nome_propriedade ?? `Propriedade ${t.id_propriedade}`
+        );
+      }
+    });
+
     return Array.from(mapa.entries());
-  }, [talhoes]);
+  }, [propriedadesApi, talhoes]);
 
   const { data: tiposSolo = [] } = useQuery({
     queryKey: ["tiposSolo"],
