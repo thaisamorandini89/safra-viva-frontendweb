@@ -293,7 +293,7 @@ export const ESTADO_PADRAO: ConfiguracoesEstado = {
     { id: "u2", nome: "João Silva", email: "joao.silva@safraviva.com.br", telefone: "(66) 99999-0002", perfil: "agronomo", status: "Ativo" },
     { id: "u3", nome: "Maria Souza", email: "maria.souza@safraviva.com.br", telefone: "(66) 99999-0003", perfil: "financeiro", status: "Ativo" },
     { id: "u4", nome: "Carlos Lima", email: "carlos.lima@safraviva.com.br", telefone: "(66) 99999-0004", perfil: "supervisor-campo", status: "Ativo" },
-    { id: "u5", nome: "Ana Pereira", email: "ana.pereira@safraviva.com.br", telefone: "(66) 99999-0005", perfil: "estoquista", status: "Inativo" },
+    { id: "u5", nome: "Ana Pereira", email: "ana.pereira@safraviva.com.br", telefone: "(66) 99999-0005", perfil: "estoquista", status: "Ativo" },
   ],
   perfis: PERFIS_PADRAO,
   cadastros: {
@@ -351,25 +351,44 @@ export const ESTADO_PADRAO: ConfiguracoesEstado = {
 };
 
 // --------------------------------------------------------- persistência
-const STORAGE_KEY = "safraviva:configuracoes:v1";
+const STORAGE_KEY = "safraviva:configuracoes:v2";
+const STORAGE_KEY_LEGADO = "safraviva:configuracoes:v1";
+
+/** Mescla o estado salvo com os padrões (suporta campos novos). */
+function mesclarEstado(salvo: Partial<ConfiguracoesEstado>): ConfiguracoesEstado {
+  return {
+    ...ESTADO_PADRAO,
+    ...salvo,
+    empresa: { ...ESTADO_PADRAO.empresa, ...(salvo.empresa ?? {}) },
+    cadastros: { ...ESTADO_PADRAO.cadastros, ...(salvo.cadastros ?? {}) },
+    parametros: { ...ESTADO_PADRAO.parametros, ...(salvo.parametros ?? {}) },
+    seguranca: { ...ESTADO_PADRAO.seguranca, ...(salvo.seguranca ?? {}) },
+    backup: { ...ESTADO_PADRAO.backup, ...(salvo.backup ?? {}) },
+    notificacoes: { ...ESTADO_PADRAO.notificacoes, ...(salvo.notificacoes ?? {}) },
+    usuarios: salvo.usuarios ?? ESTADO_PADRAO.usuarios,
+    perfis: salvo.perfis ?? ESTADO_PADRAO.perfis,
+  };
+}
 
 export function carregarEstado(): ConfiguracoesEstado {
   try {
     if (typeof localStorage === "undefined") return ESTADO_PADRAO;
+
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return ESTADO_PADRAO;
-    const salvo = JSON.parse(raw) as Partial<ConfiguracoesEstado>;
-    // Mescla com os padrões para suportar novos campos adicionados depois.
-    return {
-      ...ESTADO_PADRAO,
-      ...salvo,
-      empresa: { ...ESTADO_PADRAO.empresa, ...(salvo.empresa ?? {}) },
-      cadastros: { ...ESTADO_PADRAO.cadastros, ...(salvo.cadastros ?? {}) },
-      parametros: { ...ESTADO_PADRAO.parametros, ...(salvo.parametros ?? {}) },
-      seguranca: { ...ESTADO_PADRAO.seguranca, ...(salvo.seguranca ?? {}) },
-      backup: { ...ESTADO_PADRAO.backup, ...(salvo.backup ?? {}) },
-      notificacoes: { ...ESTADO_PADRAO.notificacoes, ...(salvo.notificacoes ?? {}) },
-    };
+    if (raw) return mesclarEstado(JSON.parse(raw) as Partial<ConfiguracoesEstado>);
+
+    // Migração do formato antigo: preserva os dados existentes, mas reativa
+    // todos os usuários para evitar bloqueios de acesso ao login.
+    const legado = localStorage.getItem(STORAGE_KEY_LEGADO);
+    if (legado) {
+      const salvo = JSON.parse(legado) as Partial<ConfiguracoesEstado>;
+      if (Array.isArray(salvo.usuarios)) {
+        salvo.usuarios = salvo.usuarios.map((u) => ({ ...u, status: "Ativo" as StatusUsuario }));
+      }
+      return mesclarEstado(salvo);
+    }
+
+    return ESTADO_PADRAO;
   } catch {
     return ESTADO_PADRAO;
   }
