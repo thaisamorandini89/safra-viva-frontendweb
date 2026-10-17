@@ -1,5 +1,6 @@
 import { lazy, Suspense, useState } from "react";
 import Sidebar from "./components/layout/Sidebar";
+import InicioModule from "./components/inicio/InicioModule";
 import EmpresasModule from "./components/empresas/EmpresasModule";
 import PropriedadesModule from "./components/propriedades/PropriedadesModule";
 import TalhoesModule from "./components/talhoes/TalhoesModule";
@@ -9,6 +10,9 @@ import FinanceiroModule from "./components/financeiro/FinanceiroModule";
 
 const RelatoriosModule = lazy(
   () => import("./components/relatorios/RelatoriosModule")
+);
+const ConfiguracoesModule = lazy(
+  () => import("./components/configuracoes/ConfiguracoesModule")
 );
 
 const TABS = [
@@ -21,8 +25,12 @@ const TABS = [
   { label: "Relatórios", icon: "📊" },
 ];
 
+const INICIO_TAB = 7;
+const CONFIG_TAB = 8;
+const SEM_BARRA = [INICIO_TAB, CONFIG_TAB];
+
 export default function App() {
-  const [tab, setTab] = useState(0);
+  const [tab, setTab] = useState(INICIO_TAB);
 
   return (
     <div
@@ -32,22 +40,25 @@ export default function App() {
       <Sidebar activeTab={tab} onTabChange={setTab} />
 
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Tab switcher */}
-        <div className="flex overflow-x-auto bg-white border-b border-gray-200 px-6 pt-3 print:hidden">
-          {TABS.map((t, i) => (
-            <button
-              key={t.label}
-              onClick={() => setTab(i)}
-              className={`shrink-0 px-5 py-2.5 text-sm font-semibold border-b-2 transition-colors -mb-px
-                ${tab === i
-                  ? "border-green-600 text-green-700"
-                  : "border-transparent text-gray-400 hover:text-gray-600"}`}
-            >
-              {t.icon} {t.label}
-            </button>
-          ))}
-        </div>
+        {/* Tab switcher (ocultado na tela inicial e em configurações) */}
+        {!SEM_BARRA.includes(tab) && (
+          <div className="flex overflow-x-auto bg-white border-b border-gray-200 px-6 pt-3 print:hidden">
+            {TABS.map((t, i) => (
+              <button
+                key={t.label}
+                onClick={() => setTab(i)}
+                className={`shrink-0 px-5 py-2.5 text-sm font-semibold border-b-2 transition-colors -mb-px
+                  ${tab === i
+                    ? "border-green-600 text-green-700"
+                    : "border-transparent text-gray-400 hover:text-gray-600"}`}
+              >
+                {t.icon} {t.label}
+              </button>
+            ))}
+          </div>
+        )}
 
+        {tab === INICIO_TAB && <InicioModule onNavigate={setTab} />}
         {tab === 0 && <EmpresasModule />}
         {tab === 1 && <PropriedadesModule />}
         {tab === 2 && <TalhoesModule />}
@@ -63,6 +74,17 @@ export default function App() {
             }
           >
             <RelatoriosModule />
+          </Suspense>
+        )}
+        {tab === CONFIG_TAB && (
+          <Suspense
+            fallback={
+              <div className="flex-1 p-10 text-center text-sm text-gray-400">
+                Carregando configurações...
+              </div>
+            }
+          >
+            <ConfiguracoesModule />
           </Suspense>
         )}
       </div>

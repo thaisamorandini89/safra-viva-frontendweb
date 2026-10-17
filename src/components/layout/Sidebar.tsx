@@ -7,7 +7,7 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { icon: "🏠", label: "Início" },
+  { icon: "🏠", label: "Início", tab: 7 },
   { icon: "🏢", label: "Empresas Agrícolas", tab: 0 },
   { icon: "🌿", label: "Propriedades", tab: 1 },
   { icon: "🗂️", label: "Talhões", tab: 2 },
@@ -16,7 +16,7 @@ const navItems: NavItem[] = [
   { icon: "📦", label: "Insumos", tab: 4 },
   { icon: "📊", label: "Relatórios", tab: 6 },
   { icon: "🗺️", label: "Mapa" },
-  { icon: "⚙️", label: "Configurações" },
+  { icon: "⚙️", label: "Configurações", tab: 8 },
 ];
 
 interface SidebarProps {
