@@ -2,7 +2,7 @@
 // Módulo de Atividades Agrícolas — tipos de domínio
 // ---------------------------------------------------------------------------
 
-/** Categorias operacionais e seus respectivos tipos de atividade */
+/** Categorias operacionais e seus respectivos tipos (usado apenas para ícones/cores de fallback) */
 export const CATEGORIAS_ATIVIDADE = {
   "Preparo de Solo": ["Aração", "Gradagem", "Subsolagem", "Nivelamento"],
   Plantio: ["Plantio Direto", "Plantio Convencional"],
@@ -30,12 +30,26 @@ export const CATEGORIA_META: Record<
   Colheita: { icone: "🌾", hex: "#f97316", chip: "bg-orange-50 text-orange-700 border-orange-200" },
 };
 
-/** Descobre a categoria a partir do tipo da atividade */
-export function categoriaDoTipo(tipo: string): CategoriaAtividade {
-  const achada = CATEGORIAS.find((c) =>
-    (CATEGORIAS_ATIVIDADE[c] as readonly string[]).includes(tipo)
+const CATEGORIA_PADRAO: CategoriaAtividade = "Tratos Culturais";
+
+/** Descobre a categoria a partir do nome da categoria do backend ou do tipo da atividade */
+export function categoriaDoTipo(valor?: string | null): CategoriaAtividade {
+  if (!valor) return CATEGORIA_PADRAO;
+  // 1) casa direto com o nome de uma categoria
+  const porNome = CATEGORIAS.find((c) => c.toLowerCase() === valor.toLowerCase());
+  if (porNome) return porNome;
+  // 2) casa pelo tipo pertencente à categoria
+  const porTipo = CATEGORIAS.find((c) =>
+    (CATEGORIAS_ATIVIDADE[c] as readonly string[]).some(
+      (t) => t.toLowerCase() === valor.toLowerCase()
+    )
   );
-  return achada ?? "Tratos Culturais";
+  return porTipo ?? CATEGORIA_PADRAO;
+}
+
+/** Resolve a categoria visual de uma atividade (prioriza o campo categoria do backend) */
+export function categoriaVisual(a: AtividadeAgricola): CategoriaAtividade {
+  return categoriaDoTipo(a.categoria ?? a.tipo_atividade);
 }
 
 export const STATUS_ATIVIDADE = ["Planejada", "Em Andamento", "Concluída"] as const;
@@ -67,6 +81,7 @@ export const STATUS_ATIVIDADE_META: Record<
 };
 
 export interface InsumoUtilizado {
+  id_insumo?: number;
   nome: string;
   quantidade: number;
   unidade: string;
@@ -74,51 +89,56 @@ export interface InsumoUtilizado {
 }
 
 export interface MaquinaUtilizada {
+  id_maquina?: number;
   nome: string;
   horas?: number;
   custo?: number;
 }
 
-/** Entidade: AtividadeAgricola */
+/** Entidade: AtividadeAgricola (espelha o retorno do backend, com ids normalizados em string) */
 export interface AtividadeAgricola {
   id: string;
-  id_empresa: number;
+  id_empresa?: number | null;
   id_propriedade: number;
   nome_propriedade?: string;
   id_talhao: string;
   codigo_talhao?: string;
   nome_talhao?: string;
-  id_safra: string;
+  id_safra?: string;
   safra?: string;
+  id_categoria_atividade?: number;
+  categoria?: string;
+  id_tipo_atividade?: number;
   tipo_atividade: string;
   data_inicio: string; // ISO yyyy-mm-dd
   data_fim?: string | null;
-  id_responsavel: number;
+  id_responsavel?: string; // UUID do funcionário
   responsavel?: string;
   status: StatusAtividade;
-  custo_operacao?: number;
+  custo_operacao?: number | null;
+  custo_total?: number;
+  atrasada?: boolean;
   insumos?: InsumoUtilizado[];
   maquinas?: MaquinaUtilizada[];
   observacoes?: string;
 }
 
-/** Payload de criação */
+/** Payload enviado ao backend ao criar/atualizar uma atividade */
 export interface NovaAtividadePayload {
-  id_empresa: number;
-  id_propriedade: number;
-  id_talhao: string;
-  id_safra: string;
-  safra?: string;
-  tipo_atividade: string;
+  id_categoria_atividade: number;
+  id_tipo_atividade: number;
+  id_talhao: number;
+  id_propriedade?: number;
+  id_empresa?: number;
+  safra?: string | null;
   data_inicio: string;
   data_fim?: string | null;
-  id_responsavel: number;
-  responsavel?: string;
+  id_responsavel?: string;
   status: StatusAtividade;
-  custo_operacao?: number;
-  insumos?: InsumoUtilizado[];
-  maquinas?: MaquinaUtilizada[];
-  observacoes?: string;
+  custo_operacao?: number | null;
+  observacoes?: string | null;
+  insumos?: { id_insumo: number; quantidade?: number; custo?: number }[];
+  maquinas?: { id_maquina: number; horas?: number; custo?: number }[];
 }
 
 // ---------------------------------------------------------------------------
@@ -129,6 +149,7 @@ const hoje = () => new Date().toISOString().slice(0, 10);
 
 /** Atividade atrasada: prazo final vencido e ainda não concluída */
 export function isAtrasada(a: AtividadeAgricola): boolean {
+  if (a.atrasada != null) return a.atrasada;
   if (a.status === "Concluída") return false;
   const prazo = a.data_fim ?? a.data_inicio;
   return !!prazo && prazo < hoje();
@@ -136,6 +157,7 @@ export function isAtrasada(a: AtividadeAgricola): boolean {
 
 /** Custo informado ou somatório de insumos + máquinas */
 export function custoTotal(a: AtividadeAgricola): number {
+  if (a.custo_total != null) return Number(a.custo_total);
   if (a.custo_operacao != null) return Number(a.custo_operacao);
   const insumos = (a.insumos ?? []).reduce((s, i) => s + Number(i.custo || 0), 0);
   const maquinas = (a.maquinas ?? []).reduce((s, m) => s + Number(m.custo || 0), 0);
