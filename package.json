@@ -7,7 +7,9 @@
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "seed:insumos": "node scripts/seed-insumos.mjs",
+    "seed:insumos:dry": "node scripts/seed-insumos.mjs --dry-run"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.101.0",

@@ -17,7 +17,7 @@ const navItems: NavItem[] = [
   { icon: "📦", label: "Insumos", tab: 4 },
   { icon: "💰", label: "Financeiro", tab: 5 },
   { icon: "📊", label: "Relatórios", tab: 6 },
-  { icon: "🗺️", label: "Mapa" },
+  { icon: "🗺️", label: "Mapa", tab: 9 },
   { icon: "⚙️", label: "Configurações", tab: 8 },
 ];
 

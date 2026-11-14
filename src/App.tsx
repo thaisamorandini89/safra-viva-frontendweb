@@ -16,6 +16,7 @@ const RelatoriosModule = lazy(
 const ConfiguracoesModule = lazy(
   () => import("./components/configuracoes/ConfiguracoesModule")
 );
+const MapaModule = lazy(() => import("./components/mapa/MapaModule"));
 
 const TABS = [
   { label: "Empresa Agrícola", icon: "🏢" },
@@ -29,7 +30,8 @@ const TABS = [
 
 const INICIO_TAB = 7;
 const CONFIG_TAB = 8;
-const SEM_BARRA = [INICIO_TAB, CONFIG_TAB];
+const MAPA_TAB = 9;
+const SEM_BARRA = [INICIO_TAB, CONFIG_TAB, MAPA_TAB];
 
 export default function App() {
   const { usuario } = useAuth();
@@ -90,6 +92,17 @@ export default function App() {
             }
           >
             <ConfiguracoesModule />
+          </Suspense>
+        )}
+        {tab === MAPA_TAB && (
+          <Suspense
+            fallback={
+              <div className="flex-1 p-10 text-center text-sm text-gray-400">
+                Carregando mapa...
+              </div>
+            }
+          >
+            <MapaModule />
           </Suspense>
         )}
       </div>
