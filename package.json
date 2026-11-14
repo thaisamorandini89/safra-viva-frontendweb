@@ -8,6 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "test": "vitest run",
     "seed:insumos": "node scripts/seed-insumos.mjs",
     "seed:insumos:dry": "node scripts/seed-insumos.mjs --dry-run"
   },
@@ -36,7 +37,8 @@
     "globals": "^17.6.0",
     "tailwindcss": "^4.3.0",
     "typescript": "^6.0.3",
-    "vite": "^8.0.12"
+    "vite": "^8.0.12",
+    "vitest": "^5.1.0"
   },
   "overrides": {
     "exceljs": {
