@@ -9,6 +9,7 @@ import InsumosModule from "./components/insumos/InsumosModule";
 import FinanceiroModule from "./components/financeiro/FinanceiroModule";
 import { useAuth } from "./components/auth/AuthProvider";
 import LoginPage from "./components/auth/LoginPage";
+import SafraIAAssistant from "./components/safraia/SafraIAAssistant";
 
 const RelatoriosModule = lazy(
   () => import("./components/relatorios/RelatoriosModule")
@@ -106,6 +107,9 @@ export default function App() {
           </Suspense>
         )}
       </div>
+
+      {/* Assistente SafraIA — botão flutuante disponível em todas as telas */}
+      <SafraIAAssistant />
     </div>
   );
 }

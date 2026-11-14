@@ -18,6 +18,11 @@ import { TALHOES_MOCK } from './talhoesMock';
 import { ATIVIDADES_MOCK } from './atividadesMock';
 import { INSUMOS_MOCK_ESTOQUE, MOVIMENTACOES_MOCK } from './insumosMock';
 import {
+  SafraIAConsultaPayload,
+  SafraIAResposta,
+} from '../types/safraIA';
+import { responderSafraIA } from './safraIAMock';
+import {
   Lancamento,
   NovoLancamentoPayload,
   CentroCusto,
@@ -318,6 +323,31 @@ export async function criarMovimentacao(
   } catch {
     // Fallback local: gera uma movimentação "salva" apenas em memória
     return { ...dados, id: `local-${Date.now()}` } as MovimentacaoEstoque;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// SafraIA — assistente inteligente rural
+// ---------------------------------------------------------------------------
+
+/**
+ * Envia a pergunta do usuário ao agente SafraIA. Quando o backend LLM
+ * (/api/safra-ia/consultar) não responder, usa o motor de interpretação
+ * local (mock) analisando o contexto da fazenda já carregado no frontend.
+ */
+export async function consultarSafraIA(
+  payload: SafraIAConsultaPayload
+): Promise<SafraIAResposta> {
+  try {
+    const { data } = await api.post<SafraIAResposta>('/api/safra-ia/consultar', {
+      pergunta: payload.pergunta,
+      persona: payload.persona,
+    });
+    if (data && typeof data.texto === 'string') return data;
+    return responderSafraIA(payload);
+  } catch {
+    console.warn('[safra-ia] endpoint indisponível — usando interpretação local.');
+    return responderSafraIA(payload);
   }
 }
 
