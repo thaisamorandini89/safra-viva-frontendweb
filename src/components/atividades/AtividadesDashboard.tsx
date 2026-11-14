@@ -3,9 +3,9 @@ import {
   AtividadeAgricola,
   STATUS_ATIVIDADE,
   STATUS_ATIVIDADE_META,
-  CATEGORIAS,
   CATEGORIA_META,
   categoriaDoTipo,
+  categoriaVisual,
   custoTotal,
   isAtrasada,
   fmtMoeda,
@@ -17,6 +17,8 @@ import Gauge from "../ui/Gauge";
 import DonutChart from "../ui/charts/DonutChart";
 import BarChart from "../ui/charts/BarChart";
 import AtividadeStatusBadge from "./AtividadeStatusBadge";
+
+const nomeCategoria = (a: AtividadeAgricola) => a.categoria ?? categoriaVisual(a);
 
 const PALETA_SAFRA = ["#16a34a", "#0ea5e9", "#f59e0b", "#a855f7", "#f97316", "#64748b"];
 
@@ -64,13 +66,20 @@ export default function AtividadesDashboard({ atividades, onVerAtividade }: Prop
   }, [base]);
 
   // ------------------------------------------------------------ por categoria
-  const porCategoria = useMemo(
-    () =>
-      CATEGORIAS.map((c) => ({
-        label: c,
-        valor: base.filter((a) => categoriaDoTipo(a.tipo_atividade) === c).length,
-        cor: CATEGORIA_META[c].hex,
-      })).filter((d) => d.valor > 0),
+  const porCategoria = useMemo(() => {
+    const mapa = new Map<string, number>();
+    base.forEach((a) =>
+      mapa.set(nomeCategoria(a), (mapa.get(nomeCategoria(a)) ?? 0) + 1)
+    );
+    return Array.from(mapa.entries()).map(([label, valor]) => ({
+      label,
+      valor,
+      cor: CATEGORIA_META[categoriaDoTipo(label)].hex,
+    }));
+  }, [base]);
+
+  const categoriaPorTipo = useMemo(
+    () => new Map(base.map((a) => [a.tipo_atividade, nomeCategoria(a)])),
     [base]
   );
 
@@ -86,10 +95,10 @@ export default function AtividadesDashboard({ atividades, onVerAtividade }: Prop
       .map(([label, valor]) => ({
         label,
         valor,
-        cor: CATEGORIA_META[categoriaDoTipo(label)].hex,
-        detalhe: categoriaDoTipo(label),
+        cor: CATEGORIA_META[categoriaDoTipo(categoriaPorTipo.get(label))].hex,
+        detalhe: categoriaPorTipo.get(label),
       }));
-  }, [base]);
+  }, [base, categoriaPorTipo]);
 
   // --------------------------------------------------------------- por talhão
   const porTalhao = useMemo(() => {
@@ -133,9 +142,9 @@ export default function AtividadesDashboard({ atividades, onVerAtividade }: Prop
       .map(([label, valor]) => ({
         label,
         valor,
-        cor: CATEGORIA_META[categoriaDoTipo(label)].hex,
+        cor: CATEGORIA_META[categoriaDoTipo(categoriaPorTipo.get(label))].hex,
       }));
-  }, [base]);
+  }, [base, categoriaPorTipo]);
 
   // ------------------------------------------------------- últimas atividades
   const ultimas = useMemo(
@@ -276,7 +285,7 @@ export default function AtividadesDashboard({ atividades, onVerAtividade }: Prop
             </thead>
             <tbody className="divide-y divide-gray-100">
               {ultimas.map((a) => {
-                const cat = categoriaDoTipo(a.tipo_atividade);
+                const cat = categoriaVisual(a);
                 return (
                   <tr
                     key={a.id}
@@ -287,7 +296,7 @@ export default function AtividadesDashboard({ atividades, onVerAtividade }: Prop
                       <div className="font-semibold text-gray-800">
                         {CATEGORIA_META[cat].icone} {a.tipo_atividade}
                       </div>
-                      <div className="text-xs text-gray-400">{cat}</div>
+                      <div className="text-xs text-gray-400">{nomeCategoria(a)}</div>
                     </td>
                     <td className="px-4 py-3">
                       <span className="font-mono text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">

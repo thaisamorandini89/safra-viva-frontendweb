@@ -1,7 +1,7 @@
 import {
   AtividadeAgricola,
   CATEGORIA_META,
-  categoriaDoTipo,
+  categoriaVisual,
   custoTotal,
   duracaoDias,
   isAtrasada,
@@ -17,7 +17,7 @@ interface Props {
 }
 
 export default function AtividadeDetalhe({ atividade: a, onVoltar }: Props) {
-  const cat = categoriaDoTipo(a.tipo_atividade);
+  const cat = categoriaVisual(a);
   const custoInsumos = (a.insumos ?? []).reduce((s, i) => s + Number(i.custo || 0), 0);
   const custoMaquinas = (a.maquinas ?? []).reduce((s, m) => s + Number(m.custo || 0), 0);
 
@@ -48,7 +48,7 @@ export default function AtividadeDetalhe({ atividade: a, onVoltar }: Props) {
             <span
               className={`inline-block mt-1 text-[10px] font-semibold px-1.5 py-0.5 rounded border ${CATEGORIA_META[cat].chip}`}
             >
-              {cat}
+              {a.categoria ?? cat}
             </span>
           </div>
         </div>
