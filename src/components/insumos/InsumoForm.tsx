@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getPropriedades } from "../../services/api";
+import { getPropriedadesLista } from "../../services/api";
 import { FORNECEDORES_MOCK } from "../../services/insumosMock";
 import {
   Insumo,
@@ -54,15 +54,15 @@ export default function InsumoForm({
   const [observacoes, setObservacoes] = useState("");
   const [erros, setErros] = useState<Record<string, string>>({});
 
-  const { data: propriedadesApi = [] } = useQuery({
+  const { data: propriedadesApi = [] } = useQuery<any[]>({
     queryKey: ["propriedades"],
-    queryFn: getPropriedades,
+    queryFn: getPropriedadesLista,
   });
 
   /** Propriedades do backend + as já referenciadas nos insumos carregados */
   const opcoesPropriedade = useMemo(() => {
     const mapa = new Map<string, string>();
-    (propriedadesApi as any[]).forEach((p) => {
+    (Array.isArray(propriedadesApi) ? propriedadesApi : []).forEach((p) => {
       const id = p.id_propriedade ?? p.id;
       if (id != null) mapa.set(String(id), p.nome_propriedade ?? p.nome ?? `#${id}`);
     });
