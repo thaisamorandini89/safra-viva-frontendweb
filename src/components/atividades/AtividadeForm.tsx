@@ -1,20 +1,22 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getTalhoes } from "../../services/api";
+import {
+  getTalhoes,
+  getCategoriasAtividade,
+  getTiposAtividade,
+  getFuncionarios,
+  getMaquinas,
+  getInsumos,
+  getStatusAtividadeOpcoes,
+} from "../../services/api";
 import { Talhao } from "../../types/talhao";
-import { FUNCIONARIOS_MOCK, MAQUINAS_MOCK, INSUMOS_MOCK } from "../../services/atividadesMock";
 import {
   AtividadeAgricola,
   NovaAtividadePayload,
   InsumoUtilizado,
   MaquinaUtilizada,
-  CATEGORIAS,
-  CATEGORIAS_ATIVIDADE,
-  CategoriaAtividade,
-  CATEGORIA_META,
   STATUS_ATIVIDADE,
   StatusAtividade,
-  categoriaDoTipo,
   fmtMoeda,
 } from "../../types/atividade";
 
@@ -44,8 +46,9 @@ export default function AtividadeForm({
   atividadeEdicao = null,
 }: Props) {
   const modoEdicao = atividadeEdicao != null;
-  const [categoria, setCategoria] = useState<CategoriaAtividade | "">("");
-  const [tipo, setTipo] = useState("");
+
+  const [idCategoria, setIdCategoria] = useState("");
+  const [idTipo, setIdTipo] = useState("");
   const [idTalhao, setIdTalhao] = useState("");
   const [safra, setSafra] = useState("");
   const [idResponsavel, setIdResponsavel] = useState("");
@@ -58,16 +61,57 @@ export default function AtividadeForm({
   const [maquinas, setMaquinas] = useState<MaquinaUtilizada[]>([]);
   const [erros, setErros] = useState<Record<string, string>>({});
 
+  // ----------------------------------------------------------------- queries
+  const { data: categorias = [] } = useQuery({
+    queryKey: ["categorias-atividade"],
+    queryFn: getCategoriasAtividade,
+  });
+
+  const { data: tipos = [] } = useQuery({
+    queryKey: ["tipos-atividade", idCategoria],
+    queryFn: () => getTiposAtividade(idCategoria ? Number(idCategoria) : undefined),
+    enabled: !!idCategoria,
+  });
+
+  const { data: funcionarios = [] } = useQuery({
+    queryKey: ["funcionarios"],
+    queryFn: getFuncionarios,
+  });
+
+  const { data: catalogoMaquinas = [] } = useQuery({
+    queryKey: ["maquinas"],
+    queryFn: getMaquinas,
+  });
+
+  const { data: catalogoInsumos = [] as any[] } = useQuery<any[]>({
+    queryKey: ["insumos"],
+    queryFn: getInsumos as any,
+  });
+
+  const { data: talhoes = [] } = useQuery({
+    queryKey: ["talhoes"],
+    queryFn: getTalhoes,
+  });
+
+  const { data: statusOpcoes = STATUS_ATIVIDADE as unknown as string[] } = useQuery({
+    queryKey: ["status-atividade"],
+    queryFn: getStatusAtividadeOpcoes,
+  });
+
   // Pré-preenche o formulário quando em modo de edição
   useEffect(() => {
     if (!atividadeEdicao) return;
-    setCategoria(categoriaDoTipo(atividadeEdicao.tipo_atividade));
-    setTipo(atividadeEdicao.tipo_atividade ?? "");
+    setIdCategoria(
+      atividadeEdicao.id_categoria_atividade
+        ? String(atividadeEdicao.id_categoria_atividade)
+        : ""
+    );
+    setIdTipo(
+      atividadeEdicao.id_tipo_atividade ? String(atividadeEdicao.id_tipo_atividade) : ""
+    );
     setIdTalhao(atividadeEdicao.id_talhao ?? "");
     setSafra(atividadeEdicao.safra ?? "");
-    setIdResponsavel(
-      atividadeEdicao.id_responsavel ? String(atividadeEdicao.id_responsavel) : ""
-    );
+    setIdResponsavel(atividadeEdicao.id_responsavel ?? "");
     setDataInicio(atividadeEdicao.data_inicio ?? "");
     setDataFim(atividadeEdicao.data_fim ?? "");
     setStatus(atividadeEdicao.status ?? "Planejada");
@@ -80,19 +124,13 @@ export default function AtividadeForm({
     setErros({});
   }, [atividadeEdicao]);
 
-  const { data: talhoes = [] } = useQuery({
-    queryKey: ["talhoes"],
-    queryFn: getTalhoes,
-  });
-
   /** Talhões do backend + os já referenciados nas atividades carregadas */
   const opcoesTalhao = useMemo(() => {
-    const mapa = new Map<string, { rotulo: string; idPropriedade: number; propriedade?: string }>();
+    const mapa = new Map<string, { rotulo: string; idPropriedade: number }>();
     talhoes.forEach((t: Talhao) =>
       mapa.set(t.id, {
         rotulo: `${t.codigo} · ${t.nome}`,
         idPropriedade: t.id_propriedade,
-        propriedade: t.nome_propriedade,
       })
     );
     atividades.forEach((a) => {
@@ -100,7 +138,6 @@ export default function AtividadeForm({
         mapa.set(a.id_talhao, {
           rotulo: `${a.codigo_talhao ?? a.id_talhao} · ${a.nome_talhao ?? ""}`.trim(),
           idPropriedade: a.id_propriedade,
-          propriedade: a.nome_propriedade,
         });
     });
     return Array.from(mapa.entries());
@@ -114,10 +151,6 @@ export default function AtividadeForm({
     [atividades]
   );
 
-  const tiposDisponiveis = categoria
-    ? (CATEGORIAS_ATIVIDADE[categoria] as readonly string[])
-    : [];
-
   const custoInsumos = insumos.reduce((s, i) => s + Number(i.custo || 0), 0);
   const custoMaquinas = maquinas.reduce((s, m) => s + Number(m.custo || 0), 0);
   const custoCalculado = custoInsumos + custoMaquinas;
@@ -125,34 +158,50 @@ export default function AtividadeForm({
 
   // ------------------------------------------------------------------ insumos
   const addInsumo = () =>
-    setInsumos((l) => [...l, { nome: "", quantidade: 0, unidade: "kg", custo: 0 }]);
+    setInsumos((l) => [...l, { id_insumo: undefined, nome: "", quantidade: 0, unidade: "", custo: 0 }]);
 
-  const setInsumo = (i: number, campo: keyof InsumoUtilizado, valor: string) =>
+  const selecionarInsumo = (i: number, idInsumo: string) =>
     setInsumos((l) =>
-      l.map((item, idx) =>
-        idx !== i
-          ? item
-          : {
-              ...item,
-              [campo]:
-                campo === "quantidade" || campo === "custo" ? num(valor) : valor,
-            }
-      )
+      l.map((item, idx) => {
+        if (idx !== i) return item;
+        const cat = catalogoInsumos.find((c: any) => String(c.id_insumo) === idInsumo);
+        return {
+          ...item,
+          id_insumo: idInsumo ? Number(idInsumo) : undefined,
+          nome: cat?.nome_produto ?? cat?.nome ?? "",
+          unidade: cat?.unidade_medida ?? item.unidade,
+        };
+      })
+    );
+
+  const setInsumoCampo = (i: number, campo: "quantidade" | "custo", valor: string) =>
+    setInsumos((l) =>
+      l.map((item, idx) => (idx !== i ? item : { ...item, [campo]: num(valor) }))
     );
 
   const removerInsumo = (i: number) =>
     setInsumos((l) => l.filter((_, idx) => idx !== i));
 
   // ----------------------------------------------------------------- máquinas
-  const addMaquina = () => setMaquinas((l) => [...l, { nome: "", horas: 0, custo: 0 }]);
+  const addMaquina = () =>
+    setMaquinas((l) => [...l, { id_maquina: undefined, nome: "", horas: 0, custo: 0 }]);
 
-  const setMaquina = (i: number, campo: keyof MaquinaUtilizada, valor: string) =>
+  const selecionarMaquina = (i: number, idMaquina: string) =>
     setMaquinas((l) =>
-      l.map((item, idx) =>
-        idx !== i
-          ? item
-          : { ...item, [campo]: campo === "nome" ? valor : num(valor) }
-      )
+      l.map((item, idx) => {
+        if (idx !== i) return item;
+        const cat = catalogoMaquinas.find((c: any) => String(c.id_maquina) === idMaquina);
+        return {
+          ...item,
+          id_maquina: idMaquina ? Number(idMaquina) : undefined,
+          nome: cat?.nome ?? "",
+        };
+      })
+    );
+
+  const setMaquinaCampo = (i: number, campo: "horas" | "custo", valor: string) =>
+    setMaquinas((l) =>
+      l.map((item, idx) => (idx !== i ? item : { ...item, [campo]: num(valor) }))
     );
 
   const removerMaquina = (i: number) =>
@@ -162,36 +211,19 @@ export default function AtividadeForm({
   const validar = () => {
     const e: Record<string, string> = {};
 
-    if (!categoria) e.categoria = "Selecione a categoria da operação.";
-    if (!tipo) e.tipo = "Selecione o tipo de atividade.";
-    // Critério de aceite: toda atividade deve estar vinculada a um talhão
+    if (!idCategoria) e.categoria = "Selecione a categoria da operação.";
+    if (!idTipo) e.tipo = "Selecione o tipo de atividade.";
     if (!idTalhao) e.talhao = "Toda atividade deve estar vinculada a um talhão.";
-    // Critério de aceite: toda atividade deve possuir responsável
     if (!idResponsavel) e.responsavel = "Toda atividade deve possuir um responsável.";
     if (!dataInicio) e.dataInicio = "Informe a data de início.";
     if (dataFim && dataInicio && dataFim < dataInicio)
       e.dataFim = "A data de término não pode ser anterior à data de início.";
     if (status === "Concluída" && !dataFim)
       e.dataFim = "Atividades concluídas precisam de data de término.";
-    if (insumos.some((i) => !i.nome.trim()))
-      e.insumos = "Informe o nome de todos os insumos adicionados.";
-    if (maquinas.some((m) => !m.nome.trim()))
-      e.maquinas = "Informe o nome de todas as máquinas adicionadas.";
-
-    // Não permite atividades iguais: mesmo talhão, tipo e data de início
-    if (idTalhao && tipo && dataInicio) {
-      const duplicada = atividades.some(
-        (a) =>
-          a.id !== atividadeEdicao?.id &&
-          a.id_talhao === idTalhao &&
-          a.tipo_atividade === tipo &&
-          a.data_inicio === dataInicio
-      );
-      if (duplicada) {
-        e.duplicada =
-          "Já existe uma atividade deste tipo para o mesmo talhão e data de início. Altere o tipo, o talhão ou a data.";
-      }
-    }
+    if (insumos.some((i) => !i.id_insumo))
+      e.insumos = "Selecione o insumo em todos os itens adicionados.";
+    if (maquinas.some((m) => !m.id_maquina))
+      e.maquinas = "Selecione a máquina em todos os itens adicionados.";
 
     setErros(e);
     return Object.keys(e).length === 0;
@@ -200,25 +232,31 @@ export default function AtividadeForm({
   const handleSalvar = () => {
     if (!validar()) return;
 
-    const talhaoInfo = opcoesTalhao.find(([id]) => id === idTalhao)?.[1];
-    const funcionario = FUNCIONARIOS_MOCK.find((f) => f.id === Number(idResponsavel));
-
     onSalvar({
-      id_empresa: 1,
-      id_propriedade: talhaoInfo?.idPropriedade ?? 0,
-      id_talhao: idTalhao,
-      id_safra: safra || "sem-safra",
-      safra: safra || undefined,
-      tipo_atividade: tipo,
+      id_categoria_atividade: Number(idCategoria),
+      id_tipo_atividade: Number(idTipo),
+      id_talhao: Number(idTalhao),
+      safra: safra || null,
       data_inicio: dataInicio,
       data_fim: dataFim || null,
-      id_responsavel: Number(idResponsavel),
-      responsavel: funcionario?.nome,
+      id_responsavel: idResponsavel || undefined,
       status,
-      custo_operacao: custoFinal || undefined,
-      insumos: insumos.length ? insumos : undefined,
-      maquinas: maquinas.length ? maquinas : undefined,
-      observacoes: observacoes.trim() || undefined,
+      custo_operacao: custo !== "" ? custoFinal : null,
+      observacoes: observacoes.trim() || null,
+      insumos: insumos
+        .filter((i) => i.id_insumo)
+        .map((i) => ({
+          id_insumo: i.id_insumo as number,
+          quantidade: i.quantidade || undefined,
+          custo: i.custo || undefined,
+        })),
+      maquinas: maquinas
+        .filter((m) => m.id_maquina)
+        .map((m) => ({
+          id_maquina: m.id_maquina as number,
+          horas: m.horas || undefined,
+          custo: m.custo || undefined,
+        })),
     });
   };
 
@@ -227,29 +265,20 @@ export default function AtividadeForm({
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 lg:p-8">
-      {erros.duplicada && (
-        <div className="mb-5 rounded-lg border border-red-200 bg-red-50 p-4">
-          <p className="text-sm font-semibold text-red-700 flex items-center gap-2">
-            <span aria-hidden>⚠️</span>
-            {erros.duplicada}
-          </p>
-        </div>
-      )}
-
       {/* -------------------------------------------------- Operação executada */}
       <FormSection title="Operação" cols={3}>
         <Field label="Categoria" required>
           <Select
-            value={categoria}
+            value={idCategoria}
             onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
-              setCategoria(e.target.value as CategoriaAtividade);
-              setTipo("");
+              setIdCategoria(e.target.value);
+              setIdTipo("");
             }}
             placeholder="Selecione a categoria"
           >
-            {CATEGORIAS.map((c) => (
-              <option key={c} value={c}>
-                {CATEGORIA_META[c].icone} {c}
+            {categorias.map((c) => (
+              <option key={c.id_categoria_atividade} value={c.id_categoria_atividade}>
+                {c.nome}
               </option>
             ))}
           </Select>
@@ -258,14 +287,14 @@ export default function AtividadeForm({
 
         <Field label="Tipo de Atividade" required>
           <Select
-            value={tipo}
-            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setTipo(e.target.value)}
-            placeholder={categoria ? "Selecione o tipo" : "Selecione a categoria primeiro"}
-            disabled={!categoria}
+            value={idTipo}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setIdTipo(e.target.value)}
+            placeholder={idCategoria ? "Selecione o tipo" : "Selecione a categoria primeiro"}
+            disabled={!idCategoria}
           >
-            {tiposDisponiveis.map((t) => (
-              <option key={t} value={t}>
-                {t}
+            {tipos.map((t) => (
+              <option key={t.id_atividade} value={t.id_atividade}>
+                {t.descricao}
               </option>
             ))}
           </Select>
@@ -279,7 +308,7 @@ export default function AtividadeForm({
               setStatus(e.target.value as StatusAtividade)
             }
           >
-            {STATUS_ATIVIDADE.map((s) => (
+            {statusOpcoes.map((s) => (
               <option key={s} value={s}>
                 {s}
               </option>
@@ -324,9 +353,10 @@ export default function AtividadeForm({
             }
             placeholder="Selecione o responsável"
           >
-            {FUNCIONARIOS_MOCK.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.nome} — {f.cargo}
+            {funcionarios.map((f) => (
+              <option key={f.id_funcionario} value={f.id_funcionario}>
+                {f.nome_completo}
+                {f.cargo ? ` — ${f.cargo}` : ""}
               </option>
             ))}
           </Select>
@@ -374,12 +404,19 @@ export default function AtividadeForm({
             className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end bg-gray-50 border border-gray-100 rounded-lg p-3"
           >
             <Field label="Insumo" className="sm:col-span-5">
-              <Input
-                list="insumos-disponiveis"
-                value={item.nome}
-                onChange={(e) => setInsumo(i, "nome", e.target.value)}
-                placeholder="Ex.: Ureia 45%"
-              />
+              <Select
+                value={item.id_insumo ? String(item.id_insumo) : ""}
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                  selecionarInsumo(i, e.target.value)
+                }
+                placeholder="Selecione o insumo"
+              >
+                {catalogoInsumos.map((c: any) => (
+                  <option key={c.id_insumo} value={c.id_insumo}>
+                    {c.nome_produto}
+                  </option>
+                ))}
+              </Select>
             </Field>
             <Field label="Quantidade" className="sm:col-span-2">
               <Input
@@ -387,15 +424,11 @@ export default function AtividadeForm({
                 step="0.01"
                 min="0"
                 value={item.quantidade || ""}
-                onChange={(e) => setInsumo(i, "quantidade", e.target.value)}
+                onChange={(e) => setInsumoCampo(i, "quantidade", e.target.value)}
               />
             </Field>
             <Field label="Unidade" className="sm:col-span-2">
-              <Input
-                value={item.unidade}
-                onChange={(e) => setInsumo(i, "unidade", e.target.value)}
-                placeholder="kg, L, t..."
-              />
+              <Input value={item.unidade} readOnly placeholder="—" />
             </Field>
             <Field label="Custo (R$)" className="sm:col-span-2">
               <Input
@@ -403,7 +436,7 @@ export default function AtividadeForm({
                 step="0.01"
                 min="0"
                 value={item.custo || ""}
-                onChange={(e) => setInsumo(i, "custo", e.target.value)}
+                onChange={(e) => setInsumoCampo(i, "custo", e.target.value)}
               />
             </Field>
             <div className="sm:col-span-1">
@@ -418,11 +451,6 @@ export default function AtividadeForm({
             </div>
           </div>
         ))}
-        <datalist id="insumos-disponiveis">
-          {INSUMOS_MOCK.map((i) => (
-            <option key={i.nome} value={i.nome} />
-          ))}
-        </datalist>
         <Erro campo="insumos" />
         <Button variant="secondary" onClick={addInsumo}>
           + Adicionar insumo
@@ -438,12 +466,19 @@ export default function AtividadeForm({
             className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end bg-gray-50 border border-gray-100 rounded-lg p-3"
           >
             <Field label="Máquina / Implemento" className="sm:col-span-7">
-              <Input
-                list="maquinas-disponiveis"
-                value={item.nome}
-                onChange={(e) => setMaquina(i, "nome", e.target.value)}
-                placeholder="Ex.: Trator John Deere 6110J"
-              />
+              <Select
+                value={item.id_maquina ? String(item.id_maquina) : ""}
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                  selecionarMaquina(i, e.target.value)
+                }
+                placeholder="Selecione a máquina"
+              >
+                {catalogoMaquinas.map((c: any) => (
+                  <option key={c.id_maquina} value={c.id_maquina}>
+                    {c.nome}
+                  </option>
+                ))}
+              </Select>
             </Field>
             <Field label="Horas" className="sm:col-span-2">
               <Input
@@ -451,7 +486,7 @@ export default function AtividadeForm({
                 step="0.1"
                 min="0"
                 value={item.horas || ""}
-                onChange={(e) => setMaquina(i, "horas", e.target.value)}
+                onChange={(e) => setMaquinaCampo(i, "horas", e.target.value)}
               />
             </Field>
             <Field label="Custo (R$)" className="sm:col-span-2">
@@ -460,7 +495,7 @@ export default function AtividadeForm({
                 step="0.01"
                 min="0"
                 value={item.custo || ""}
-                onChange={(e) => setMaquina(i, "custo", e.target.value)}
+                onChange={(e) => setMaquinaCampo(i, "custo", e.target.value)}
               />
             </Field>
             <div className="sm:col-span-1">
@@ -475,11 +510,6 @@ export default function AtividadeForm({
             </div>
           </div>
         ))}
-        <datalist id="maquinas-disponiveis">
-          {MAQUINAS_MOCK.map((m) => (
-            <option key={m} value={m} />
-          ))}
-        </datalist>
         <Erro campo="maquinas" />
         <Button variant="secondary" onClick={addMaquina}>
           + Adicionar máquina

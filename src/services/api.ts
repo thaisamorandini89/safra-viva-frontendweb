@@ -249,13 +249,176 @@ export async function excluirTalhao(id: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Atividades Agrícolas
+// Atividades Agrícolas — catálogos de apoio
 // ---------------------------------------------------------------------------
+
+export interface CategoriaAtividadeAPI {
+  id_categoria_atividade: number;
+  nome: string;
+  status?: boolean;
+}
+
+export interface TipoAtividadeAPI {
+  id_atividade: number;
+  descricao: string;
+  id_categoria_atividade: number;
+  categoria_nome?: string;
+  status?: boolean;
+}
+
+export interface MaquinaAPI {
+  id_maquina: number;
+  nome: string;
+  tipo?: string | null;
+  observacoes?: string | null;
+  status?: boolean;
+}
+
+export interface FuncionarioAPI {
+  id_funcionario: string;
+  nome_completo: string;
+  cargo?: string | null;
+  status?: boolean;
+}
+
+export interface AtividadeIndicadores {
+  total: number;
+  custo_total: number;
+  em_andamento: number;
+  planejadas: number;
+  concluidas: number;
+  atrasadas: number;
+}
+
+/** Lista as categorias de atividade cadastradas */
+export async function getCategoriasAtividade(): Promise<CategoriaAtividadeAPI[]> {
+  try {
+    const { data } = await api.get<CategoriaAtividadeAPI[]>('/api/categorias-atividade');
+    return Array.isArray(data) ? data : [];
+  } catch {
+    console.warn('[categorias-atividade] endpoint indisponível.');
+    return [];
+  }
+}
+
+export async function criarCategoriaAtividade(nome: string): Promise<CategoriaAtividadeAPI> {
+  const { data } = await api.post('/api/categorias-atividade', { nome });
+  return data as CategoriaAtividadeAPI;
+}
+
+/** Lista os tipos de atividade, opcionalmente filtrando por categoria */
+export async function getTiposAtividade(idCategoria?: number): Promise<TipoAtividadeAPI[]> {
+  try {
+    const { data } = await api.get<TipoAtividadeAPI[]>('/api/tipos-atividade', {
+      params: idCategoria ? { id_categoria_atividade: idCategoria } : {},
+    });
+    return Array.isArray(data) ? data : [];
+  } catch {
+    console.warn('[tipos-atividade] endpoint indisponível.');
+    return [];
+  }
+}
+
+export async function criarTipoAtividade(
+  descricao: string,
+  idCategoria: number
+): Promise<TipoAtividadeAPI> {
+  const { data } = await api.post('/api/tipos-atividade', {
+    descricao,
+    id_categoria_atividade: idCategoria,
+  });
+  return data as TipoAtividadeAPI;
+}
+
+/** Lista as máquinas/implementos do catálogo */
+export async function getMaquinas(): Promise<MaquinaAPI[]> {
+  try {
+    const { data } = await api.get<MaquinaAPI[]>('/api/maquinas');
+    return Array.isArray(data) ? data : [];
+  } catch {
+    console.warn('[maquinas] endpoint indisponível.');
+    return [];
+  }
+}
+
+export async function criarMaquina(nome: string, tipo?: string): Promise<MaquinaAPI> {
+  const { data } = await api.post('/api/maquinas', { nome, tipo });
+  return data as MaquinaAPI;
+}
+
+/** Lista os funcionários (responsáveis) ativos */
+export async function getFuncionarios(): Promise<FuncionarioAPI[]> {
+  try {
+    const { data } = await api.get<FuncionarioAPI[]>('/api/funcionarios');
+    return Array.isArray(data) ? data : [];
+  } catch {
+    console.warn('[funcionarios] endpoint indisponível.');
+    return [];
+  }
+}
+
+/** Opções de status aceitas pela atividade (para o combo do formulário) */
+export async function getStatusAtividadeOpcoes(): Promise<string[]> {
+  try {
+    const { data } = await api.get<string[]>('/api/atividades/status-opcoes');
+    return Array.isArray(data) && data.length ? data : ['Planejada', 'Em Andamento', 'Concluída'];
+  } catch {
+    return ['Planejada', 'Em Andamento', 'Concluída'];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Atividades Agrícolas — operação
+// ---------------------------------------------------------------------------
+
+/** Normaliza o retorno do backend para o tipo AtividadeAgricola do frontend */
+function mapAtividade(raw: any): AtividadeAgricola {
+  return {
+    id: String(raw?.id_atividade_agricola ?? raw?.id ?? ''),
+    id_empresa: raw?.id_empresa ?? null,
+    id_propriedade: Number(raw?.id_propriedade ?? 0),
+    nome_propriedade: raw?.nome_propriedade,
+    id_talhao: String(raw?.id_talhao ?? ''),
+    codigo_talhao: raw?.codigo_talhao,
+    nome_talhao: raw?.nome_talhao,
+    safra: raw?.safra,
+    id_categoria_atividade: raw?.id_categoria_atividade,
+    categoria: raw?.categoria,
+    id_tipo_atividade: raw?.id_tipo_atividade,
+    tipo_atividade: raw?.tipo_atividade ?? '',
+    data_inicio: raw?.data_inicio ?? '',
+    data_fim: raw?.data_fim ?? null,
+    id_responsavel: raw?.id_responsavel ?? raw?.id_funcionario ?? undefined,
+    responsavel: raw?.responsavel,
+    status: raw?.status ?? 'Planejada',
+    custo_operacao: raw?.custo_operacao ?? null,
+    custo_total: raw?.custo_total,
+    atrasada: raw?.atrasada,
+    insumos: Array.isArray(raw?.insumos)
+      ? raw.insumos.map((i: any) => ({
+          id_insumo: i?.id_insumo,
+          nome: i?.nome ?? '',
+          quantidade: Number(i?.quantidade ?? 0),
+          unidade: i?.unidade ?? '',
+          custo: i?.custo != null ? Number(i.custo) : undefined,
+        }))
+      : [],
+    maquinas: Array.isArray(raw?.maquinas)
+      ? raw.maquinas.map((m: any) => ({
+          id_maquina: m?.id_maquina,
+          nome: m?.nome ?? '',
+          horas: m?.horas != null ? Number(m.horas) : undefined,
+          custo: m?.custo != null ? Number(m.custo) : undefined,
+        }))
+      : [],
+    observacoes: raw?.observacoes,
+  };
+}
 
 export async function getAtividades(): Promise<AtividadeAgricola[]> {
   try {
-    const { data } = await api.get<AtividadeAgricola[]>('/api/atividades');
-    if (Array.isArray(data) && data.length) return data;
+    const { data } = await api.get<any[]>('/api/atividades');
+    if (Array.isArray(data)) return data.map(mapAtividade);
     return ATIVIDADES_MOCK;
   } catch {
     console.warn('[atividades] endpoint indisponível — usando dados de demonstração.');
@@ -263,16 +426,37 @@ export async function getAtividades(): Promise<AtividadeAgricola[]> {
   }
 }
 
+export async function getAtividade(id: string): Promise<AtividadeAgricola> {
+  const { data } = await api.get(`/api/atividades/${id}`);
+  return mapAtividade(data);
+}
+
+export async function getAtividadeIndicadores(): Promise<AtividadeIndicadores | null> {
+  try {
+    const { data } = await api.get<AtividadeIndicadores>('/api/atividades/indicadores');
+    return data ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function criarAtividade(
   dados: NovaAtividadePayload
 ): Promise<AtividadeAgricola> {
-  try {
-    const { data } = await api.post<AtividadeAgricola>('/api/atividades', dados);
-    return data;
-  } catch {
-    // Fallback local: gera uma atividade "salva" apenas em memória
-    return { ...dados, id: `local-${Date.now()}` } as AtividadeAgricola;
-  }
+  const { data } = await api.post('/api/atividades', dados);
+  return mapAtividade(data);
+}
+
+export async function atualizarAtividade(
+  id: string,
+  dados: NovaAtividadePayload
+): Promise<AtividadeAgricola> {
+  const { data } = await api.put(`/api/atividades/${id}`, dados);
+  return mapAtividade(data);
+}
+
+export async function excluirAtividade(id: string): Promise<void> {
+  await api.delete(`/api/atividades/${id}`);
 }
 
 // ---------------------------------------------------------------------------

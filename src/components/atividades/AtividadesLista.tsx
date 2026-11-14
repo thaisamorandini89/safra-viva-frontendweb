@@ -3,11 +3,8 @@ import {
   AtividadeAgricola,
   STATUS_ATIVIDADE,
   StatusAtividade,
-  CATEGORIAS,
   CATEGORIA_META,
-  CATEGORIAS_ATIVIDADE,
-  CategoriaAtividade,
-  categoriaDoTipo,
+  categoriaVisual,
   custoTotal,
   isAtrasada,
   duracaoDias,
@@ -25,11 +22,13 @@ interface Props {
   onExcluir: (a: AtividadeAgricola) => void;
 }
 
+const nomeCategoria = (a: AtividadeAgricola) => a.categoria ?? categoriaVisual(a);
+
 type Coluna = "tipo" | "talhao" | "responsavel" | "data_inicio" | "custo" | "status";
 
 export default function AtividadesLista({ atividades, onVerAtividade, onNova, onEditar, onExcluir }: Props) {
   const [busca, setBusca] = useState("");
-  const [categoria, setCategoria] = useState<"todas" | CategoriaAtividade>("todas");
+  const [categoria, setCategoria] = useState("todas");
   const [tipo, setTipo] = useState("todos");
   const [talhao, setTalhao] = useState("todos");
   const [safra, setSafra] = useState("todas");
@@ -55,12 +54,21 @@ export default function AtividadesLista({ atividades, onVerAtividade, onNova, on
     [atividades]
   );
 
+  const categorias = useMemo(
+    () => Array.from(new Set(atividades.map(nomeCategoria))).sort(),
+    [atividades]
+  );
+
   const tiposDisponiveis = useMemo(
     () =>
-      categoria === "todas"
-        ? CATEGORIAS.flatMap((c) => CATEGORIAS_ATIVIDADE[c] as readonly string[])
-        : (CATEGORIAS_ATIVIDADE[categoria] as readonly string[]),
-    [categoria]
+      Array.from(
+        new Set(
+          atividades
+            .filter((a) => categoria === "todas" || nomeCategoria(a) === categoria)
+            .map((a) => a.tipo_atividade)
+        )
+      ).sort(),
+    [atividades, categoria]
   );
 
   const filtradas = useMemo(() => {
@@ -71,7 +79,7 @@ export default function AtividadesLista({ atividades, onVerAtividade, onNova, on
         a.codigo_talhao ?? ""
       }`.toLowerCase();
       if (termo && !texto.includes(termo)) return false;
-      if (categoria !== "todas" && categoriaDoTipo(a.tipo_atividade) !== categoria) return false;
+      if (categoria !== "todas" && nomeCategoria(a) !== categoria) return false;
       if (tipo !== "todos" && a.tipo_atividade !== tipo) return false;
       if (talhao !== "todos" && a.id_talhao !== talhao) return false;
       if (safra !== "todas" && a.safra !== safra) return false;
@@ -138,7 +146,7 @@ export default function AtividadesLista({ atividades, onVerAtividade, onNova, on
     ];
     const linhas = filtradas.map((a) => [
       a.tipo_atividade,
-      categoriaDoTipo(a.tipo_atividade),
+      nomeCategoria(a),
       a.nome_propriedade ?? a.id_propriedade,
       `${a.codigo_talhao ?? a.id_talhao} ${a.nome_talhao ?? ""}`.trim(),
       a.safra ?? "",
@@ -208,13 +216,13 @@ export default function AtividadesLista({ atividades, onVerAtividade, onNova, on
           <select
             value={categoria}
             onChange={(e) => {
-              setCategoria(e.target.value as any);
+              setCategoria(e.target.value);
               setTipo("todos");
             }}
             className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-2 focus:ring-green-400"
           >
             <option value="todas">Todas as categorias</option>
-            {CATEGORIAS.map((c) => (
+            {categorias.map((c) => (
               <option key={c} value={c}>
                 {c}
               </option>
@@ -312,7 +320,7 @@ export default function AtividadesLista({ atividades, onVerAtividade, onNova, on
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filtradas.map((a) => {
-                const cat = categoriaDoTipo(a.tipo_atividade);
+                const cat = categoriaVisual(a);
                 return (
                   <tr
                     key={a.id}
@@ -326,7 +334,7 @@ export default function AtividadesLista({ atividades, onVerAtividade, onNova, on
                       <span
                         className={`inline-block mt-1 text-[10px] font-semibold px-1.5 py-0.5 rounded border ${CATEGORIA_META[cat].chip}`}
                       >
-                        {cat}
+                        {nomeCategoria(a)}
                       </span>
                     </td>
                     <td className="px-4 py-3">

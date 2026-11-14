@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getAtividades, criarAtividade } from "../../services/api";
+import {
+  getAtividades,
+  criarAtividade,
+  atualizarAtividade,
+  excluirAtividade,
+} from "../../services/api";
 import { AtividadeAgricola, NovaAtividadePayload } from "../../types/atividade";
 import { colors } from "../../theme";
 import TopBar from "../layout/TopBar";
@@ -37,39 +42,44 @@ export default function AtividadesModule() {
     queryFn: getAtividades,
   });
 
+  const invalidar = () => {
+    queryClient.invalidateQueries({ queryKey: ["atividades"] });
+  };
+
+  const mensagemErro = (erro: any, fallback: string) =>
+    erro?.response?.data?.error ??
+    erro?.response?.data?.message ??
+    erro?.message ??
+    fallback;
+
+  // -------------------------------------------------------------- criar
   const { mutate: salvar, isPending: salvando } = useMutation({
     mutationFn: (dados: NovaAtividadePayload) => criarAtividade(dados),
     onSuccess: (nova) => {
-      queryClient.setQueryData<AtividadeAgricola[]>(["atividades"], (antigas = []) => [
-        ...antigas,
-        nova,
-      ]);
+      invalidar();
       setToast({
         tipo: "sucesso",
         titulo: "Atividade registrada com sucesso!",
         descricao: `${nova.tipo_atividade} já aparece na sua listagem de atividades.`,
       });
+      setAtividadeEditando(null);
       setAba("lista");
     },
     onError: (erro: any) => {
       setToast({
         tipo: "erro",
         titulo: "Não foi possível salvar a atividade",
-        descricao:
-          erro?.response?.data?.message ??
-          erro?.message ??
-          "Verifique os dados informados e tente novamente.",
+        descricao: mensagemErro(erro, "Verifique os dados informados e tente novamente."),
       });
     },
   });
 
-  // Recebe o payload do formulário e decide entre criar ou atualizar
-  const handleSalvarForm = (dados: NovaAtividadePayload) => {
-    if (atividadeEditando) {
-      const atualizada: AtividadeAgricola = { ...atividadeEditando, ...dados };
-      queryClient.setQueryData<AtividadeAgricola[]>(["atividades"], (antigas = []) =>
-        antigas.map((a) => (a.id === atividadeEditando.id ? atualizada : a))
-      );
+  // ------------------------------------------------------------ atualizar
+  const { mutate: atualizar, isPending: atualizando } = useMutation({
+    mutationFn: ({ id, dados }: { id: string; dados: NovaAtividadePayload }) =>
+      atualizarAtividade(id, dados),
+    onSuccess: (atualizada) => {
+      invalidar();
       setToast({
         tipo: "sucesso",
         titulo: "Atividade atualizada com sucesso!",
@@ -77,6 +87,42 @@ export default function AtividadesModule() {
       });
       setAtividadeEditando(null);
       setAba("lista");
+    },
+    onError: (erro: any) => {
+      setToast({
+        tipo: "erro",
+        titulo: "Não foi possível atualizar a atividade",
+        descricao: mensagemErro(erro, "Verifique os dados informados e tente novamente."),
+      });
+    },
+  });
+
+  // ------------------------------------------------------------- excluir
+  const { mutate: remover } = useMutation({
+    mutationFn: (id: string) => excluirAtividade(id),
+    onSuccess: (_data, _id) => {
+      invalidar();
+      setToast({
+        tipo: "sucesso",
+        titulo: "Atividade excluída",
+        descricao: "A atividade foi removida com sucesso.",
+      });
+      setAtividadeExcluindo(null);
+    },
+    onError: (erro: any) => {
+      setToast({
+        tipo: "erro",
+        titulo: "Não foi possível excluir a atividade",
+        descricao: mensagemErro(erro, "Tente novamente em instantes."),
+      });
+      setAtividadeExcluindo(null);
+    },
+  });
+
+  // Recebe o payload do formulário e decide entre criar ou atualizar
+  const handleSalvarForm = (dados: NovaAtividadePayload) => {
+    if (atividadeEditando) {
+      atualizar({ id: atividadeEditando.id, dados });
     } else {
       salvar(dados);
     }
@@ -88,23 +134,14 @@ export default function AtividadesModule() {
     setAba("nova");
   };
 
-  // Abre o modal de confirmação de exclusão
   const excluir = (a: AtividadeAgricola) => setAtividadeExcluindo(a);
 
-  // Confirma e remove a atividade da listagem
   const confirmarExclusao = () => {
     if (!atividadeExcluindo) return;
-    const nome = atividadeExcluindo.tipo_atividade;
-    queryClient.setQueryData<AtividadeAgricola[]>(["atividades"], (antigas = []) =>
-      antigas.filter((a) => a.id !== atividadeExcluindo.id)
-    );
-    setToast({
-      tipo: "sucesso",
-      titulo: "Atividade excluída",
-      descricao: `${nome} foi removida com sucesso.`,
-    });
-    setAtividadeExcluindo(null);
+    remover(atividadeExcluindo.id);
   };
+
+  const salvandoForm = salvando || atualizando;
 
   const cabecalho = selecionada
     ? {
@@ -222,7 +259,7 @@ export default function AtividadesModule() {
               ) : (
                 <AtividadeForm
                   atividades={atividades}
-                  salvando={salvando}
+                  salvando={salvandoForm}
                   atividadeEdicao={atividadeEditando}
                   onCancelar={() => {
                     setAtividadeEditando(null);
