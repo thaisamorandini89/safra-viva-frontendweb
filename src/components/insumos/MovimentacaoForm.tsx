@@ -14,8 +14,9 @@ import {
   TipoMovimentacao,
   TIPOS_MOVIMENTACAO,
   CATEGORIA_INSUMO_META,
-  isVencido,
+  LoteInsumo,
   lotesVencidos,
+  saldoUtilizavel,
   fmtMoeda,
   fmtQtd,
   fmtData,
@@ -33,6 +34,8 @@ interface Props {
   insumos: Insumo[];
   insumoInicial?: Insumo | null;
   tipoInicial?: TipoMovimentacao;
+  /** Descarte: saída que retira só deste lote, mesmo vencido */
+  loteDescarte?: LoteInsumo | null;
   onCancelar: () => void;
   onSalvar: (dados: NovaMovimentacaoPayload) => void;
   salvando?: boolean;
@@ -44,13 +47,16 @@ export default function MovimentacaoForm({
   insumos,
   insumoInicial = null,
   tipoInicial = "Entrada",
+  loteDescarte = null,
   onCancelar,
   onSalvar,
   salvando = false,
 }: Props) {
   const [tipo, setTipo] = useState<TipoMovimentacao>(tipoInicial);
   const [idInsumo, setIdInsumo] = useState(insumoInicial?.id ?? "");
-  const [quantidade, setQuantidade] = useState("");
+  const [quantidade, setQuantidade] = useState(
+    loteDescarte ? String(loteDescarte.quantidade) : ""
+  );
   const [valorUnitario, setValorUnitario] = useState(
     insumoInicial ? String(insumoInicial.valor_unitario) : ""
   );
@@ -64,7 +70,7 @@ export default function MovimentacaoForm({
   const [idTalhao, setIdTalhao] = useState("");
   const [safra, setSafra] = useState("");
   const [idAtividade, setIdAtividade] = useState("");
-  const [destino, setDestino] = useState("");
+  const [destino, setDestino] = useState(loteDescarte ? "Descarte de lote vencido" : "");
   const [observacao, setObservacao] = useState("");
   const [erros, setErros] = useState<Record<string, string>>({});
 
@@ -124,6 +130,12 @@ export default function MovimentacaoForm({
     tipo === "Entrada" ? saldoAtual + num(quantidade) : saldoAtual - num(quantidade);
   const valorTotal = num(quantidade) * num(valorUnitario);
   const vencidos = insumo ? lotesVencidos(insumo) : [];
+  // numa saída comum não sai o que está em lote vencido; no descarte, só o saldo do lote
+  const disponivel = loteDescarte
+    ? loteDescarte.quantidade
+    : insumo
+    ? saldoUtilizavel(insumo)
+    : 0;
 
   // ---------------------------------------------------------------- validação
   const validar = () => {
@@ -136,15 +148,15 @@ export default function MovimentacaoForm({
     if (!idResponsavel) e.responsavel = "Toda movimentação deve possuir responsável.";
 
     if (tipo === "Saída") {
-      // RN001: nenhum produto poderá apresentar saldo negativo
-      if (num(quantidade) > saldoAtual)
-        e.quantidade = `Saldo insuficiente. Disponível: ${fmtQtd(
-          saldoAtual,
-          insumo?.unidade_medida
-        )}.`;
-      // RN002: produtos vencidos não podem ser utilizados
-      if (insumo && isVencido(insumo))
-        e.insumo = "Produto vencido não pode ser utilizado em operações.";
+      // RN001 e RN002: sem saldo negativo, e lote vencido só sai por descarte
+      if (num(quantidade) > disponivel) {
+        const saldo = fmtQtd(disponivel, insumo?.unidade_medida);
+        e.quantidade = loteDescarte
+          ? `Quantidade maior que o saldo do lote. Disponível: ${saldo}.`
+          : vencidos.length
+          ? `Saldo utilizável insuficiente. Disponível: ${saldo}; o restante está em lote vencido e só sai por descarte.`
+          : `Saldo insuficiente. Disponível: ${saldo}.`;
+      }
       // RN003: toda saída deve informar o destino
       if (!destino.trim() && !idTalhao)
         e.destino = "Informe o destino ou o talhão de aplicação.";
@@ -193,6 +205,8 @@ export default function MovimentacaoForm({
             id_atividade: idAtividade || undefined,
             atividade: atividade?.tipo_atividade,
             destino: destino.trim() || undefined,
+            id_lote: loteDescarte?.id,
+            numero_lote: loteDescarte?.numero_lote,
           }),
       observacao: observacao.trim() || undefined,
     });
@@ -203,6 +217,13 @@ export default function MovimentacaoForm({
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 lg:p-8">
+      {loteDescarte && (
+        <div className="mb-5 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+          🗑️ Descarte do lote <strong>{loteDescarte.numero_lote}</strong>, vencido em{" "}
+          {fmtData(loteDescarte.data_validade)}. A saída retira somente deste lote.
+        </div>
+      )}
+
       {/* ---------------------------------------------------- Tipo e identificação */}
       <FormSection title="Movimentação" cols={3}>
         <Field label="Tipo de Movimentação" required>
@@ -211,6 +232,7 @@ export default function MovimentacaoForm({
             onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
               setTipo(e.target.value as TipoMovimentacao)
             }
+            disabled={!!loteDescarte}
           >
             {TIPOS_MOVIMENTACAO.map((t) => (
               <option key={t} value={t}>
@@ -229,6 +251,7 @@ export default function MovimentacaoForm({
               if (escolhido) setValorUnitario(String(escolhido.valor_unitario));
             }}
             placeholder="Selecione o produto"
+            disabled={!!loteDescarte}
           >
             {insumos.map((i) => (
               <option key={i.id} value={i.id}>
@@ -463,6 +486,9 @@ export default function MovimentacaoForm({
               {vencidos
                 .map((l) => `${l.numero_lote} (${fmtData(l.data_validade)})`)
                 .join(", ")}
+              {tipo === "Saída" &&
+                !loteDescarte &&
+                ` — saldo utilizável: ${fmtQtd(disponivel, insumo.unidade_medida)}`}
             </p>
           )}
 
@@ -490,7 +516,7 @@ export default function MovimentacaoForm({
           Cancelar
         </Button>
         <Button onClick={handleSalvar} disabled={salvando}>
-          {salvando ? "Salvando..." : `Registrar ${tipo}`}
+          {salvando ? "Salvando..." : loteDescarte ? "Registrar Descarte" : `Registrar ${tipo}`}
         </Button>
       </div>
     </div>

@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { AtividadeAgricola, dataLocalISO, isAtrasada } from "./atividade";
+import {
+  AtividadeAgricola,
+  dataLocalISO,
+  descricaoPendentes,
+  isAtrasada,
+} from "./atividade";
 
 const atividade = (over: Partial<AtividadeAgricola>): AtividadeAgricola => ({
   id: "1",
@@ -37,5 +42,30 @@ describe("isAtrasada", () => {
     expect(
       isAtrasada(atividade({ data_inicio: dataLocalISO(ontem), atrasada: false }))
     ).toBe(false);
+  });
+});
+
+describe("descricaoPendentes", () => {
+  it("descreve cada insumo sem baixa com a quantidade pedida e o saldo disponível", () => {
+    const a = atividade({
+      status: "Concluída",
+      insumos: [
+        { id_insumo: 1, nome: "Ureia", quantidade: 2, unidade: "kg", baixado: true },
+        { id_insumo: 2, nome: "Calcário", quantidade: 100, unidade: "t", baixado: false },
+      ],
+      baixa_estoque: {
+        geradas: 1,
+        pendentes: [{ id_insumo: 2, nome: "Calcário", quantidade: 100, disponivel: 2.5 }],
+      },
+    });
+
+    expect(descricaoPendentes(a)).toBe("Calcário (pede 100 t, disponível 2,5 t)");
+  });
+
+  it("fica vazia quando não há pendentes", () => {
+    expect(descricaoPendentes(atividade({}))).toBe("");
+    expect(
+      descricaoPendentes(atividade({ baixa_estoque: { geradas: 2, pendentes: [] } }))
+    ).toBe("");
   });
 });

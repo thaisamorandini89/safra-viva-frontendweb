@@ -6,7 +6,11 @@ import {
   atualizarAtividade,
   excluirAtividade,
 } from "../../services/api";
-import { AtividadeAgricola, NovaAtividadePayload } from "../../types/atividade";
+import {
+  AtividadeAgricola,
+  NovaAtividadePayload,
+  descricaoPendentes,
+} from "../../types/atividade";
 import { colors } from "../../theme";
 import TopBar from "../layout/TopBar";
 import PageHeader from "../ui/PageHeader";
@@ -42,9 +46,23 @@ export default function AtividadesModule() {
     queryFn: getAtividadesCadastradas,
   });
 
+  // salvar ou excluir uma atividade concluída movimenta o estoque
   const invalidar = () => {
     queryClient.invalidateQueries({ queryKey: ["atividades"] });
+    queryClient.invalidateQueries({ queryKey: ["insumos"] });
+    queryClient.invalidateQueries({ queryKey: ["movimentacoes-estoque"] });
+    queryClient.invalidateQueries({ queryKey: ["movimentacoes-atividade"] });
   };
+
+  const avisoPendentes = (a: AtividadeAgricola): DadosToast | null =>
+    a.baixa_estoque?.pendentes.length
+      ? {
+          tipo: "aviso",
+          titulo: "Atividade salva com insumos sem baixa",
+          descricao: `Saldo insuficiente: ${descricaoPendentes(a)}. Registre a entrada no estoque e salve a atividade de novo para baixar.`,
+          duracao: 15000,
+        }
+      : null;
 
   const mensagemErro = (erro: any, fallback: string) =>
     erro?.response?.data?.error ??
@@ -57,11 +75,13 @@ export default function AtividadesModule() {
     mutationFn: (dados: NovaAtividadePayload) => criarAtividade(dados),
     onSuccess: (nova) => {
       invalidar();
-      setToast({
-        tipo: "sucesso",
-        titulo: "Atividade registrada com sucesso!",
-        descricao: `${nova.tipo_atividade} já aparece na sua listagem de atividades.`,
-      });
+      setToast(
+        avisoPendentes(nova) ?? {
+          tipo: "sucesso",
+          titulo: "Atividade registrada com sucesso!",
+          descricao: `${nova.tipo_atividade} já aparece na sua listagem de atividades.`,
+        }
+      );
       setAtividadeEditando(null);
       setAba("lista");
     },
@@ -80,11 +100,13 @@ export default function AtividadesModule() {
       atualizarAtividade(id, dados),
     onSuccess: (atualizada) => {
       invalidar();
-      setToast({
-        tipo: "sucesso",
-        titulo: "Atividade atualizada com sucesso!",
-        descricao: `As alterações de ${atualizada.tipo_atividade} foram salvas.`,
-      });
+      setToast(
+        avisoPendentes(atualizada) ?? {
+          tipo: "sucesso",
+          titulo: "Atividade atualizada com sucesso!",
+          descricao: `As alterações de ${atualizada.tipo_atividade} foram salvas.`,
+        }
+      );
       setAtividadeEditando(null);
       setAba("lista");
     },

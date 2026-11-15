@@ -3,11 +3,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getInsumos,
   criarInsumo,
+  atualizarInsumo,
+  excluirInsumo,
   getMovimentacoes,
   criarMovimentacao,
 } from "../../services/api";
 import {
   Insumo,
+  LoteInsumo,
   MovimentacaoEstoque,
   NovoInsumoPayload,
   NovaMovimentacaoPayload,
@@ -17,6 +20,7 @@ import {
 import { colors } from "../../theme";
 import TopBar from "../layout/TopBar";
 import PageHeader from "../ui/PageHeader";
+import ConfirmDialog from "../ui/ConfirmDialog";
 import InsumosDashboard from "./InsumosDashboard";
 import InsumosLista from "./InsumosLista";
 import InsumoForm from "./InsumoForm";
@@ -62,6 +66,16 @@ function aplicarMovimentacao(
       });
     }
   }
+  // descarte gravado só em memória (modo de demonstração)
+  if (mov.tipo === "Saída" && mov.numero_lote) {
+    const alvo = lotes.findIndex((l) => l.numero_lote === mov.numero_lote);
+    if (alvo >= 0) {
+      lotes[alvo] = {
+        ...lotes[alvo],
+        quantidade: Math.max(0, lotes[alvo].quantidade - Number(mov.quantidade)),
+      };
+    }
+  }
 
   return {
     ...insumo,
@@ -73,9 +87,12 @@ function aplicarMovimentacao(
 export default function InsumosModule() {
   const [aba, setAba] = useState<Aba>("dashboard");
   const [selecionado, setSelecionado] = useState<Insumo | null>(null);
+  const [editando, setEditando] = useState<Insumo | null>(null);
+  const [excluindo, setExcluindo] = useState<Insumo | null>(null);
   const [movimentando, setMovimentando] = useState<{
     insumo: Insumo | null;
     tipo: TipoMovimentacao;
+    lote?: LoteInsumo;
   } | null>(null);
   const queryClient = useQueryClient();
 
@@ -101,6 +118,7 @@ export default function InsumosModule() {
         ...antigos,
         novo,
       ]);
+      queryClient.invalidateQueries({ queryKey: ["insumos", "cadastrados"] });
       alert(`✅ Insumo "${novo.nome}" cadastrado com sucesso!`);
       setAba("lista");
     },
@@ -112,6 +130,59 @@ export default function InsumosModule() {
       );
     },
   });
+
+  const { mutate: atualizar, isPending: atualizandoInsumo } = useMutation({
+    mutationFn: ({ id, dados }: { id: string; dados: NovoInsumoPayload }) =>
+      atualizarInsumo(id, dados),
+    onSuccess: (atualizado) => {
+      queryClient.setQueryData<Insumo[]>(["insumos"], (antigos = []) =>
+        antigos.map((i) => (i.id === atualizado.id ? { ...i, ...atualizado } : i))
+      );
+      queryClient.invalidateQueries({ queryKey: ["insumos", "cadastrados"] });
+      alert(`✅ Insumo "${atualizado.nome}" atualizado com sucesso!`);
+      setEditando(null);
+      setAba("lista");
+    },
+    onError: (erro: any) => {
+      alert(
+        `❌ Não foi possível atualizar o insumo.\n\n${
+          erro?.response?.data?.message ?? erro?.message ?? "Erro desconhecido."
+        }`
+      );
+    },
+  });
+
+  const { mutate: remover } = useMutation({
+    mutationFn: (insumo: Insumo) => excluirInsumo(insumo.id),
+    onSuccess: (_resposta, insumo) => {
+      queryClient.setQueryData<Insumo[]>(["insumos"], (antigos = []) =>
+        antigos.filter((i) => i.id !== insumo.id)
+      );
+      queryClient.invalidateQueries({ queryKey: ["insumos", "cadastrados"] });
+      setExcluindo(null);
+      setSelecionado(null);
+      alert(`✅ Insumo "${insumo.nome}" excluído.`);
+    },
+    onError: (erro: any) => {
+      setExcluindo(null);
+      alert(
+        `❌ Não foi possível excluir o insumo.\n\n${
+          erro?.response?.data?.message ?? erro?.message ?? "Erro desconhecido."
+        }`
+      );
+    },
+  });
+
+  const salvarFormulario = (dados: NovoInsumoPayload) => {
+    if (editando) atualizar({ id: editando.id, dados });
+    else salvarInsumo(dados);
+  };
+
+  const editarInsumo = (insumo: Insumo) => {
+    setSelecionado(null);
+    setEditando(insumo);
+    setAba("novo");
+  };
 
   const { mutate: salvarMovimentacao, isPending: salvandoMovimentacao } = useMutation({
     mutationFn: (dados: NovaMovimentacaoPayload) => criarMovimentacao(dados),
@@ -127,6 +198,10 @@ export default function InsumosModule() {
       setSelecionado((atual) =>
         atual && atual.id === nova.id_insumo ? aplicarMovimentacao(atual, nova) : atual
       );
+      // gravada no backend: saldos e lotes passam a valer os de lá
+      if (!nova.id.startsWith("local-")) {
+        queryClient.invalidateQueries({ queryKey: ["insumos"] });
+      }
 
       const insumo = insumos.find((i) => i.id === nova.id_insumo);
       alert(
@@ -151,7 +226,22 @@ export default function InsumosModule() {
     setMovimentando({ insumo, tipo });
   };
 
-  const cabecalho = movimentando
+  const abrirDescarte = (insumo: Insumo, lote: LoteInsumo) => {
+    setSelecionado(null);
+    setMovimentando({ insumo, tipo: "Saída", lote });
+  };
+
+  // o detalhe acompanha os dados recarregados do backend
+  const insumoSelecionado = selecionado
+    ? insumos.find((i) => i.id === selecionado.id) ?? selecionado
+    : null;
+
+  const cabecalho = movimentando?.lote
+    ? {
+        titulo: "Descartar Lote Vencido",
+        descricao: `Retire do estoque o saldo do lote ${movimentando.lote.numero_lote}`,
+      }
+    : movimentando
     ? {
         titulo: `Registrar ${movimentando.tipo} de Estoque`,
         descricao:
@@ -182,6 +272,11 @@ export default function InsumosModule() {
         titulo: "Relatórios de Insumos",
         descricao: "Estoque atual, consumo por talhão e safra e produtos vencidos",
       }
+    : editando
+    ? {
+        titulo: "Editar Insumo",
+        descricao: `Atualize os dados de ${editando.nome}; o saldo só muda por movimentação`,
+      }
     : {
         titulo: "Cadastro de Insumo",
         descricao: "Registre um novo produto no estoque da fazenda",
@@ -191,6 +286,22 @@ export default function InsumosModule() {
 
   return (
     <div className={`flex-1 overflow-auto ${colors.background.app}`}>
+      <ConfirmDialog
+        aberto={excluindo != null}
+        tipo="perigo"
+        titulo="Excluir insumo"
+        mensagem={
+          <>
+            Tem certeza que deseja excluir o insumo{" "}
+            <strong className="text-gray-700">{excluindo?.nome}</strong>? Essa ação não
+            poderá ser desfeita.
+          </>
+        }
+        textoConfirmar="Excluir"
+        textoCancelar="Cancelar"
+        onConfirmar={() => excluindo && remover(excluindo)}
+        onCancelar={() => setExcluindo(null)}
+      />
       <TopBar
         breadcrumb="Gestão Agrícola"
         page={selecionado ? `Insumos › ${selecionado.nome}` : "Insumos"}
@@ -202,13 +313,16 @@ export default function InsumosModule() {
           {ABAS.map((a) => (
             <button
               key={a.id}
-              onClick={() => setAba(a.id)}
+              onClick={() => {
+                if (a.id !== "novo") setEditando(null);
+                setAba(a.id);
+              }}
               className={`px-5 py-2.5 text-sm font-semibold border-b-2 transition-colors -mb-px
                 ${aba === a.id
                   ? "border-green-600 text-green-700"
                   : "border-transparent text-gray-400 hover:text-gray-600"}`}
             >
-              {a.icone} {a.label}
+              {a.icone} {a.id === "novo" && editando ? "Editar Insumo" : a.label}
             </button>
           ))}
         </div>
@@ -240,16 +354,20 @@ export default function InsumosModule() {
                   insumos={insumos}
                   insumoInicial={movimentando.insumo}
                   tipoInicial={movimentando.tipo}
+                  loteDescarte={movimentando.lote}
                   onCancelar={() => setMovimentando(null)}
                   onSalvar={salvarMovimentacao}
                   salvando={salvandoMovimentacao}
                 />
-              ) : selecionado ? (
+              ) : insumoSelecionado ? (
                 <InsumoDetalhe
-                  insumo={selecionado}
+                  insumo={insumoSelecionado}
                   movimentacoes={movimentacoes}
                   onVoltar={() => setSelecionado(null)}
                   onMovimentar={abrirMovimentacao}
+                  onEditar={editarInsumo}
+                  onExcluir={setExcluindo}
+                  onDescartar={abrirDescarte}
                 />
               ) : aba === "dashboard" ? (
                 <InsumosDashboard
@@ -261,8 +379,13 @@ export default function InsumosModule() {
                 <InsumosLista
                   insumos={insumos}
                   onVerInsumo={setSelecionado}
-                  onNovo={() => setAba("novo")}
+                  onNovo={() => {
+                    setEditando(null);
+                    setAba("novo");
+                  }}
                   onMovimentar={abrirMovimentacao}
+                  onEditar={editarInsumo}
+                  onExcluir={setExcluindo}
                 />
               ) : aba === "movimentacoes" ? (
                 <MovimentacoesLista
@@ -274,10 +397,15 @@ export default function InsumosModule() {
                 <InsumosRelatorios insumos={insumos} movimentacoes={movimentacoes} />
               ) : (
                 <InsumoForm
+                  key={editando?.id ?? "novo"}
                   insumos={insumos}
-                  onCancelar={() => setAba("lista")}
-                  onSalvar={salvarInsumo}
-                  salvando={salvandoInsumo}
+                  insumoEdicao={editando}
+                  onCancelar={() => {
+                    setEditando(null);
+                    setAba("lista");
+                  }}
+                  onSalvar={salvarFormulario}
+                  salvando={salvandoInsumo || atualizandoInsumo}
                 />
               )}
             </>

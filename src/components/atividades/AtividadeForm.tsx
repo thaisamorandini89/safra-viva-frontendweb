@@ -19,6 +19,7 @@ import {
   StatusAtividade,
   fmtMoeda,
 } from "../../types/atividade";
+import { fmtQtd, saldoUtilizavel } from "../../types/insumo";
 
 import FormSection from "../ui/FormSection";
 import Field from "../ui/Field";
@@ -167,6 +168,16 @@ export default function AtividadeForm({
   const custoMaquinas = maquinas.reduce((s, m) => s + Number(m.custo || 0), 0);
   const custoCalculado = custoInsumos + custoMaquinas;
   const custoFinal = custo !== "" ? num(custo) : custoCalculado;
+
+  /** Saldo que a baixa pode usar; o que esta atividade já baixou volta ao estoque ao salvar */
+  const saldoDisponivel = (idInsumo?: number) => {
+    const cadastrado = catalogoInsumos.find((c) => c.id === String(idInsumo));
+    if (!cadastrado) return null;
+    const jaBaixado = (atividadeEdicao?.insumos ?? [])
+      .filter((i) => i.baixado && i.id_insumo === idInsumo)
+      .reduce((s, i) => s + Number(i.quantidade || 0), 0);
+    return saldoUtilizavel(cadastrado) + jaBaixado;
+  };
 
   // ------------------------------------------------------------------ insumos
   const addInsumo = () =>
@@ -432,8 +443,16 @@ export default function AtividadeForm({
 
       {/* -------------------------------------------------------------- Insumos */}
       <SectionTitle>Insumos Utilizados</SectionTitle>
+      <p className="text-xs text-gray-500 mb-3">
+        {status === "Concluída"
+          ? "📦 Ao salvar como Concluída, cada insumo com quantidade gera uma saída de estoque na data de término. Insumo sem saldo suficiente fica sem baixa."
+          : "📦 A saída de estoque dos insumos é gerada quando a atividade for salva como Concluída."}
+      </p>
       <div className="space-y-3">
-        {insumos.map((item, i) => (
+        {insumos.map((item, i) => {
+          const disponivel = saldoDisponivel(item.id_insumo);
+          const acima = disponivel != null && Number(item.quantidade || 0) > disponivel;
+          return (
           <div
             key={i}
             className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end bg-gray-50 border border-gray-100 rounded-lg p-3"
@@ -486,8 +505,20 @@ export default function AtividadeForm({
                 🗑️
               </button>
             </div>
+            {disponivel != null && (
+              <p
+                className={`sm:col-span-12 text-xs ${
+                  acima ? "text-amber-700 font-semibold" : "text-gray-400"
+                }`}
+              >
+                {acima
+                  ? `⚠️ Quantidade acima do saldo disponível (${fmtQtd(disponivel, item.unidade)}). Se a atividade for concluída assim, este insumo fica sem baixa no estoque.`
+                  : `Saldo disponível: ${fmtQtd(disponivel, item.unidade)}`}
+              </p>
+            )}
           </div>
-        ))}
+          );
+        })}
         <Erro campo="insumos" />
         <Button variant="secondary" onClick={addInsumo}>
           + Adicionar insumo

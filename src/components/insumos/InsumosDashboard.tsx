@@ -221,7 +221,7 @@ export default function InsumosDashboard({
           titulo="Produtos Vencidos"
           valor={String(kpis.vencidos)}
           tom="orange"
-          descricao="bloqueados para uso (RN002)"
+          descricao="com lote vencido em estoque"
         />
         <StatCard
           icone="💰"

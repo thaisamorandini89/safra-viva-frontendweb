@@ -28,6 +28,8 @@ interface Props {
   onVerInsumo: (i: Insumo) => void;
   onNovo: () => void;
   onMovimentar: (insumo: Insumo, tipo: TipoMovimentacao) => void;
+  onEditar: (i: Insumo) => void;
+  onExcluir: (i: Insumo) => void;
 }
 
 type Coluna = "nome" | "categoria" | "estoque" | "minimo" | "validade" | "valor";
@@ -37,6 +39,8 @@ export default function InsumosLista({
   onVerInsumo,
   onNovo,
   onMovimentar,
+  onEditar,
+  onExcluir,
 }: Props) {
   const [busca, setBusca] = useState("");
   const [categoria, setCategoria] = useState<"todas" | CategoriaInsumo>("todas");
@@ -447,6 +451,26 @@ export default function InsumosLista({
                         className="px-2 py-1 rounded hover:bg-green-100 text-gray-500 hover:text-green-700 transition"
                       >
                         👁️
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEditar(i);
+                        }}
+                        title="Editar"
+                        className="px-2 py-1 rounded hover:bg-sky-100 text-gray-500 hover:text-sky-700 transition"
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onExcluir(i);
+                        }}
+                        title="Excluir"
+                        className="px-2 py-1 rounded hover:bg-red-100 text-gray-500 hover:text-red-600 transition"
+                      >
+                        🗑️
                       </button>
                     </td>
                   </tr>
