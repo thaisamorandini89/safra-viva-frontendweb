@@ -79,7 +79,22 @@ export function insumoParaApi(dados: NovoInsumoPayload, edicao = false) {
   };
 
   // na edição o saldo não é enviado: ele só muda por movimentação
-  return edicao ? comuns : { ...comuns, estoque_atual: dados.estoque_atual };
+  if (edicao) return comuns;
+
+  // o estoque inicial vira uma entrada no backend; sem quantidade ele recusa esses dados
+  const entrada = dados.estoque_atual > 0 ? dados.entrada_inicial : undefined;
+  return {
+    ...comuns,
+    estoque_atual: dados.estoque_atual,
+    ...(entrada && {
+      entrada_inicial: {
+        id_funcionario: entrada.id_responsavel || undefined,
+        numero_lote: entrada.numero_lote || undefined,
+        data_fabricacao: entrada.data_fabricacao || undefined,
+        data_validade: entrada.data_validade || undefined,
+      },
+    }),
+  };
 }
 
 export function movimentacaoDaApi(raw: any): MovimentacaoEstoque {
@@ -88,7 +103,12 @@ export function movimentacaoDaApi(raw: any): MovimentacaoEstoque {
     id_insumo: String(raw?.id_insumo ?? ""),
     nome_insumo: texto(raw?.nome_produto),
     tipo: raw?.tipo_movimentacao === "SAIDA" ? "Saída" : "Entrada",
-    origem: raw?.origem === "ATIVIDADE" ? "Atividade" : "Manual",
+    origem:
+      raw?.origem === "ATIVIDADE"
+        ? "Atividade"
+        : raw?.origem === "CADASTRO"
+        ? "Cadastro"
+        : "Manual",
     unidade_medida: texto(raw?.unidade_medida),
     quantidade: Number(raw?.quantidade ?? 0),
     valor_unitario: numero(raw?.valor_unitario),

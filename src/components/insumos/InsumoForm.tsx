@@ -6,6 +6,7 @@ import {
   getFabricantes,
   getMarcas,
   getFornecedores,
+  getFuncionarios,
 } from "../../services/api";
 import {
   Insumo,
@@ -55,6 +56,10 @@ export default function InsumoForm({
   const [idFornecedor, setIdFornecedor] = useState("");
   const [idPropriedade, setIdPropriedade] = useState("");
   const [estoqueInicial, setEstoqueInicial] = useState("");
+  const [idResponsavel, setIdResponsavel] = useState("");
+  const [numeroLote, setNumeroLote] = useState("");
+  const [dataFabricacao, setDataFabricacao] = useState("");
+  const [dataValidade, setDataValidade] = useState("");
   const [estoqueMinimo, setEstoqueMinimo] = useState("");
   const [valorUnitario, setValorUnitario] = useState("");
   const [status, setStatus] = useState<StatusInsumo>("Ativo");
@@ -86,6 +91,11 @@ export default function InsumoForm({
   const { data: fornecedores = [] } = useQuery({
     queryKey: ["fornecedores"],
     queryFn: getFornecedores,
+  });
+
+  const { data: funcionarios = [] } = useQuery({
+    queryKey: ["funcionarios"],
+    queryFn: getFuncionarios,
   });
 
   useEffect(() => {
@@ -145,6 +155,8 @@ export default function InsumoForm({
 
   const estoqueResumo = modoEdicao ? insumoEdicao?.estoque_atual ?? 0 : num(estoqueInicial);
   const valorInicial = estoqueResumo * num(valorUnitario);
+  // o estoque inicial é registrado como uma entrada, que pede responsável e aceita lote
+  const temEstoqueInicial = !modoEdicao && num(estoqueInicial) > 0;
 
   // ---------------------------------------------------------------- validação
   const validar = () => {
@@ -159,6 +171,11 @@ export default function InsumoForm({
     if (num(estoqueInicial) < 0) e.estoqueInicial = "O estoque não pode ser negativo.";
     if (num(estoqueMinimo) < 0) e.estoqueMinimo = "O estoque mínimo não pode ser negativo.";
     if (num(valorUnitario) < 0) e.valorUnitario = "O valor unitário não pode ser negativo.";
+    if (temEstoqueInicial) {
+      if (!idResponsavel) e.responsavel = "Toda movimentação deve possuir responsável.";
+      if (dataValidade && dataFabricacao && dataValidade < dataFabricacao)
+        e.dataValidade = "A validade não pode ser anterior à fabricação.";
+    }
     if (
       insumos.some(
         (i) =>
@@ -203,6 +220,14 @@ export default function InsumoForm({
       registro_mapa: registroMapa.trim() || undefined,
       ficha_tecnica: fichaTecnica.trim() || undefined,
       observacoes: observacoes.trim() || undefined,
+      entrada_inicial: temEstoqueInicial
+        ? {
+            id_responsavel: idResponsavel,
+            numero_lote: numeroLote.trim() || undefined,
+            data_fabricacao: dataFabricacao || null,
+            data_validade: dataValidade || null,
+          }
+        : undefined,
     });
   };
 
@@ -348,6 +373,61 @@ export default function InsumoForm({
           <Erro campo="valorUnitario" />
         </Field>
       </FormSection>
+
+      {/* ------------------------------------------ Entrada do estoque inicial */}
+      {temEstoqueInicial && (
+        <FormSection title="Entrada do Estoque Inicial" cols={3}>
+          <p className="text-xs text-gray-500 sm:col-span-2 lg:col-span-3">
+            O estoque inicial é registrado como uma entrada no histórico do insumo. Informe
+            o lote e a validade para ele entrar nos alertas de vencimento.
+          </p>
+
+          <Field label="Responsável" required>
+            <Select
+              value={idResponsavel}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                setIdResponsavel(e.target.value)
+              }
+              placeholder="Selecione o responsável"
+            >
+              {funcionarios
+                .filter((f) => f.status !== false)
+                .map((f) => (
+                  <option key={f.id_funcionario} value={f.id_funcionario}>
+                    {f.nome_completo}
+                    {f.cargo ? ` — ${f.cargo}` : ""}
+                  </option>
+                ))}
+            </Select>
+            <Erro campo="responsavel" />
+          </Field>
+
+          <Field label="Número do Lote">
+            <Input
+              value={numeroLote}
+              onChange={(e) => setNumeroLote(e.target.value)}
+              placeholder="Ex.: UR-2026-014"
+            />
+          </Field>
+
+          <Field label="Data de Fabricação">
+            <Input
+              type="date"
+              value={dataFabricacao}
+              onChange={(e) => setDataFabricacao(e.target.value)}
+            />
+          </Field>
+
+          <Field label="Data de Validade">
+            <Input
+              type="date"
+              value={dataValidade}
+              onChange={(e) => setDataValidade(e.target.value)}
+            />
+            <Erro campo="dataValidade" />
+          </Field>
+        </FormSection>
+      )}
 
       {/* -------------------------------------------------- Vínculos e situação */}
       <FormSection title="Vínculos" cols={3}>

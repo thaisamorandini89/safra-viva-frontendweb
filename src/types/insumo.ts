@@ -178,7 +178,7 @@ export interface MovimentacaoEstoque {
   lotes?: LoteMovimentado[];
   unidade_medida?: string;
   /** "Atividade": saída gerada pela conclusão de uma atividade */
-  origem?: "Manual" | "Atividade";
+  origem?: "Manual" | "Atividade" | "Cadastro";
 }
 
 /** Entidade: Insumo */
@@ -229,6 +229,13 @@ export interface NovoInsumoPayload {
   registro_mapa?: string;
   ficha_tecnica?: string;
   observacoes?: string;
+  /** Dados da entrada que registra o estoque inicial; só vale na criação */
+  entrada_inicial?: {
+    id_responsavel?: string;
+    numero_lote?: string;
+    data_fabricacao?: string | null;
+    data_validade?: string | null;
+  };
 }
 
 /** Payload de criação da movimentação */
@@ -351,3 +358,9 @@ export function lotesDaMovimentacao(m: MovimentacaoEstoque, unidade?: string): s
     return lotes[0].numero_lote;
   return lotes.map((l) => `${l.numero_lote} (${fmtQtd(l.quantidade, unidade)})`).join(", ");
 }
+
+/** De onde veio uma entrada: o estoque inicial do cadastro ou o fornecedor */
+export const origemDaEntrada = (m: MovimentacaoEstoque): string =>
+  m.origem === "Cadastro"
+    ? `Estoque inicial${m.fornecedor ? ` · ${m.fornecedor}` : ""}`
+    : m.fornecedor ?? "—";
