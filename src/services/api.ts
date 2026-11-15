@@ -19,6 +19,7 @@ import { ATIVIDADES_MOCK } from './atividadesMock';
 import { INSUMOS_MOCK_ESTOQUE, MOVIMENTACOES_MOCK } from './insumosMock';
 import {
   insumoDaApi,
+  insumoParaApi,
   movimentacaoDaApi,
   movimentacaoParaApi,
   erroDoBackend,
@@ -401,7 +402,7 @@ export async function getStatusAtividadeOpcoes(): Promise<string[]> {
 // ---------------------------------------------------------------------------
 
 /** Normaliza o retorno do backend para o tipo AtividadeAgricola do frontend */
-function mapAtividade(raw: any): AtividadeAgricola {
+export function mapAtividade(raw: any): AtividadeAgricola {
   return {
     id: String(raw?.id_atividade_agricola ?? raw?.id ?? ''),
     id_empresa: raw?.id_empresa ?? null,
@@ -430,6 +431,8 @@ function mapAtividade(raw: any): AtividadeAgricola {
           quantidade: Number(i?.quantidade ?? 0),
           unidade: i?.unidade ?? '',
           custo: i?.custo != null ? Number(i.custo) : undefined,
+          baixado: i?.baixado === true,
+          id_movimentacao: i?.id_movimentacao ?? null,
         }))
       : [],
     maquinas: Array.isArray(raw?.maquinas)
@@ -441,6 +444,17 @@ function mapAtividade(raw: any): AtividadeAgricola {
         }))
       : [],
     observacoes: raw?.observacoes,
+    baixa_estoque: {
+      geradas: Number(raw?.baixa_estoque?.geradas ?? 0),
+      pendentes: Array.isArray(raw?.baixa_estoque?.pendentes)
+        ? raw.baixa_estoque.pendentes.map((p: any) => ({
+            id_insumo: p?.id_insumo,
+            nome: p?.nome ?? '',
+            quantidade: Number(p?.quantidade ?? 0),
+            disponivel: Number(p?.disponivel ?? 0),
+          }))
+        : [],
+    },
   };
 }
 
@@ -496,6 +510,53 @@ export async function excluirAtividade(id: string): Promise<void> {
 // Insumos e movimentações de estoque
 // ---------------------------------------------------------------------------
 
+export interface CategoriaInsumoAPI {
+  id_categoria_insumo: number;
+  nome_categoria: string;
+  status?: boolean;
+}
+
+export interface FabricanteAPI {
+  id_fabricante: number;
+  nome_fabricante: string;
+  status?: boolean;
+}
+
+export interface MarcaAPI {
+  id_marca: number;
+  descricao_marca: string;
+}
+
+export async function getCategoriasInsumo(): Promise<CategoriaInsumoAPI[]> {
+  try {
+    const { data } = await api.get<CategoriaInsumoAPI[]>('/api/categorias-insumo');
+    return Array.isArray(data) ? data : [];
+  } catch {
+    console.warn('[categorias-insumo] endpoint indisponível.');
+    return [];
+  }
+}
+
+export async function getFabricantes(): Promise<FabricanteAPI[]> {
+  try {
+    const { data } = await api.get<FabricanteAPI[]>('/api/fabricantes');
+    return Array.isArray(data) ? data : [];
+  } catch {
+    console.warn('[fabricantes] endpoint indisponível.');
+    return [];
+  }
+}
+
+export async function getMarcas(): Promise<MarcaAPI[]> {
+  try {
+    const { data } = await api.get<MarcaAPI[]>('/api/marcas');
+    return Array.isArray(data) ? data : [];
+  } catch {
+    console.warn('[marcas] endpoint indisponível.');
+    return [];
+  }
+}
+
 /** Insumos cadastrados, sem dados de demonstração; propaga a falha da API */
 export async function getInsumosCadastrados(): Promise<Insumo[]> {
   const { data } = await api.get<unknown[]>('/api/insumos');
@@ -514,11 +575,37 @@ export async function getInsumos(): Promise<Insumo[]> {
 
 export async function criarInsumo(dados: NovoInsumoPayload): Promise<Insumo> {
   try {
-    const { data } = await api.post<Insumo>('/api/insumos', dados);
-    return data;
-  } catch {
+    const { data } = await api.post('/api/insumos', insumoParaApi(dados));
+    return insumoDaApi(data);
+  } catch (e) {
+    const erro = erroDoBackend(e);
+    if (erro) throw erro;
     // Fallback local: gera um insumo "salvo" apenas em memória
     return { ...dados, id: `local-${Date.now()}`, lotes: [] } as Insumo;
+  }
+}
+
+export async function atualizarInsumo(
+  id: string,
+  dados: NovoInsumoPayload
+): Promise<Insumo> {
+  try {
+    const { data } = await api.put(`/api/insumos/${id}`, insumoParaApi(dados, true));
+    return insumoDaApi(data);
+  } catch (e) {
+    const erro = erroDoBackend(e);
+    if (erro) throw erro;
+    // Fallback local: reflete a edição apenas em memória
+    return { ...dados, id } as Insumo;
+  }
+}
+
+export async function excluirInsumo(id: string): Promise<void> {
+  try {
+    await api.delete(`/api/insumos/${id}`);
+  } catch (e) {
+    const erro = erroDoBackend(e);
+    if (erro) throw erro;
   }
 }
 
@@ -531,6 +618,16 @@ export async function getMovimentacoes(): Promise<MovimentacaoEstoque[]> {
     console.warn('[insumos] movimentações indisponíveis — usando dados de demonstração.');
     return MOVIMENTACOES_MOCK;
   }
+}
+
+/** Saídas de estoque vinculadas a uma atividade, automáticas e manuais */
+export async function getMovimentacoesDaAtividade(
+  idAtividade: string
+): Promise<MovimentacaoEstoque[]> {
+  const { data } = await api.get<unknown[]>('/api/movimentacoes', {
+    params: { id_atividade_agricola: idAtividade },
+  });
+  return Array.isArray(data) ? data.map(movimentacaoDaApi) : [];
 }
 
 export async function criarMovimentacao(

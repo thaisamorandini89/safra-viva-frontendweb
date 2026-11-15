@@ -86,6 +86,22 @@ export interface InsumoUtilizado {
   quantidade: number;
   unidade: string;
   custo?: number;
+  /** A conclusão da atividade gerou a saída de estoque deste item */
+  baixado?: boolean;
+  id_movimentacao?: string | null;
+}
+
+/** Insumo de atividade concluída que ficou sem saída por falta de saldo */
+export interface InsumoPendente {
+  id_insumo: number;
+  nome: string;
+  quantidade: number;
+  disponivel: number;
+}
+
+export interface BaixaEstoque {
+  geradas: number;
+  pendentes: InsumoPendente[];
 }
 
 export interface MaquinaUtilizada {
@@ -121,6 +137,7 @@ export interface AtividadeAgricola {
   insumos?: InsumoUtilizado[];
   maquinas?: MaquinaUtilizada[];
   observacoes?: string;
+  baixa_estoque?: BaixaEstoque;
 }
 
 /** Payload enviado ao backend ao criar/atualizar uma atividade */
@@ -188,3 +205,17 @@ export const fmtMoeda = (v: number) =>
 
 export const fmtData = (iso?: string | null) =>
   iso ? new Date(`${iso}T00:00:00`).toLocaleDateString("pt-BR") : "—";
+
+/** Insumos que ficaram sem baixa na conclusão, em texto para os avisos */
+export function descricaoPendentes(a: AtividadeAgricola): string {
+  const qtd = (v: number, unidade: string) =>
+    `${Number(v || 0).toLocaleString("pt-BR", { maximumFractionDigits: 3 })}${
+      unidade ? ` ${unidade}` : ""
+    }`;
+  return (a.baixa_estoque?.pendentes ?? [])
+    .map((p) => {
+      const unidade = a.insumos?.find((i) => i.id_insumo === p.id_insumo)?.unidade ?? "";
+      return `${p.nome} (pede ${qtd(p.quantidade, unidade)}, disponível ${qtd(p.disponivel, unidade)})`;
+    })
+    .join("; ");
+}

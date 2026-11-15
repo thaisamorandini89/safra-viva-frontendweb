@@ -1,7 +1,12 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getPropriedadesLista } from "../../services/api";
-import { FORNECEDORES_MOCK } from "../../services/insumosMock";
+import {
+  getPropriedadesLista,
+  getCategoriasInsumo,
+  getFabricantes,
+  getMarcas,
+  getFornecedores,
+} from "../../services/api";
 import {
   Insumo,
   NovoInsumoPayload,
@@ -27,6 +32,8 @@ interface Props {
   onCancelar: () => void;
   onSalvar: (dados: NovoInsumoPayload) => void;
   salvando?: boolean;
+  /** Quando informado, o formulário entra em modo de edição pré-preenchido */
+  insumoEdicao?: Insumo | null;
 }
 
 const num = (v: string) => Number(String(v).replace(",", ".")) || 0;
@@ -36,14 +43,16 @@ export default function InsumoForm({
   onCancelar,
   onSalvar,
   salvando = false,
+  insumoEdicao = null,
 }: Props) {
+  const modoEdicao = insumoEdicao != null;
   const [nome, setNome] = useState("");
   const [categoria, setCategoria] = useState<CategoriaInsumo | "">("");
   const [tipo, setTipo] = useState("");
   const [unidade, setUnidade] = useState("");
-  const [fabricante, setFabricante] = useState("");
-  const [marca, setMarca] = useState("");
-  const [fornecedor, setFornecedor] = useState("");
+  const [idFabricante, setIdFabricante] = useState("");
+  const [idMarca, setIdMarca] = useState("");
+  const [idFornecedor, setIdFornecedor] = useState("");
   const [idPropriedade, setIdPropriedade] = useState("");
   const [estoqueInicial, setEstoqueInicial] = useState("");
   const [estoqueMinimo, setEstoqueMinimo] = useState("");
@@ -59,6 +68,46 @@ export default function InsumoForm({
     queryFn: getPropriedadesLista,
   });
 
+  const { data: categoriasApi = [] } = useQuery({
+    queryKey: ["categorias-insumo"],
+    queryFn: getCategoriasInsumo,
+  });
+
+  const { data: fabricantes = [] } = useQuery({
+    queryKey: ["fabricantes"],
+    queryFn: getFabricantes,
+  });
+
+  const { data: marcas = [] } = useQuery({
+    queryKey: ["marcas"],
+    queryFn: getMarcas,
+  });
+
+  const { data: fornecedores = [] } = useQuery({
+    queryKey: ["fornecedores"],
+    queryFn: getFornecedores,
+  });
+
+  useEffect(() => {
+    if (!insumoEdicao) return;
+    const idTexto = (id?: number) => (id != null ? String(id) : "");
+    setNome(insumoEdicao.nome);
+    setCategoria(insumoEdicao.categoria);
+    setTipo(insumoEdicao.tipo ?? "");
+    setUnidade(insumoEdicao.unidade_medida);
+    setIdFabricante(idTexto(insumoEdicao.id_fabricante));
+    setIdMarca(idTexto(insumoEdicao.id_marca));
+    setIdFornecedor(idTexto(insumoEdicao.id_fornecedor));
+    setIdPropriedade(idTexto(insumoEdicao.id_propriedade));
+    setEstoqueMinimo(String(insumoEdicao.estoque_minimo ?? ""));
+    setValorUnitario(String(insumoEdicao.valor_unitario ?? ""));
+    setStatus(insumoEdicao.status);
+    setRegistroMapa(insumoEdicao.registro_mapa ?? "");
+    setFichaTecnica(insumoEdicao.ficha_tecnica ?? "");
+    setObservacoes(insumoEdicao.observacoes ?? "");
+    setErros({});
+  }, [insumoEdicao]);
+
   /** Propriedades do backend + as já referenciadas nos insumos carregados */
   const opcoesPropriedade = useMemo(() => {
     const mapa = new Map<string, string>();
@@ -73,22 +122,29 @@ export default function InsumoForm({
     return Array.from(mapa.entries());
   }, [propriedadesApi, insumos]);
 
-  const fornecedores = useMemo(
-    () =>
-      Array.from(
-        new Set([
-          ...FORNECEDORES_MOCK,
-          ...(insumos.map((i) => i.fornecedor).filter(Boolean) as string[]),
-        ])
-      ).sort(),
-    [insumos]
+  // itens inativos saem dos combos, exceto o já selecionado numa edição
+  const fabricantesVisiveis = fabricantes.filter(
+    (f) => f.status !== false || String(f.id_fabricante) === idFabricante
+  );
+  const fornecedoresVisiveis = fornecedores.filter(
+    (f) => f.status !== false || String(f.id_fornecedor) === idFornecedor
   );
 
-  const tiposDisponiveis = categoria
-    ? (CATEGORIAS_INSUMO[categoria] as readonly string[])
-    : [];
+  const idCategoria = categoriasApi.find(
+    (c) => c.nome_categoria.trim().toLowerCase() === categoria.toLowerCase()
+  )?.id_categoria_insumo;
 
-  const valorInicial = num(estoqueInicial) * num(valorUnitario);
+  // o tipo e a unidade já gravados continuam disponíveis mesmo fora das listas fixas
+  const tiposDaCategoria: readonly string[] = categoria ? CATEGORIAS_INSUMO[categoria] : [];
+  const tiposDisponiveis =
+    tipo && !tiposDaCategoria.includes(tipo) ? [...tiposDaCategoria, tipo] : tiposDaCategoria;
+  const unidadesDisponiveis: readonly string[] =
+    unidade && !(UNIDADES_MEDIDA as readonly string[]).includes(unidade)
+      ? [...UNIDADES_MEDIDA, unidade]
+      : UNIDADES_MEDIDA;
+
+  const estoqueResumo = modoEdicao ? insumoEdicao?.estoque_atual ?? 0 : num(estoqueInicial);
+  const valorInicial = estoqueResumo * num(valorUnitario);
 
   // ---------------------------------------------------------------- validação
   const validar = () => {
@@ -96,6 +152,8 @@ export default function InsumoForm({
 
     if (!nome.trim()) e.nome = "Informe o nome do produto.";
     if (!categoria) e.categoria = "Selecione a categoria do insumo.";
+    else if (categoriasApi.length && idCategoria == null)
+      e.categoria = "Esta categoria não existe no cadastro do sistema.";
     if (!unidade) e.unidade = "Selecione a unidade de medida.";
     // RN001: nenhum produto pode apresentar saldo negativo
     if (num(estoqueInicial) < 0) e.estoqueInicial = "O estoque não pode ser negativo.";
@@ -103,7 +161,9 @@ export default function InsumoForm({
     if (num(valorUnitario) < 0) e.valorUnitario = "O valor unitário não pode ser negativo.";
     if (
       insumos.some(
-        (i) => i.nome.trim().toLowerCase() === nome.trim().toLowerCase()
+        (i) =>
+          i.id !== insumoEdicao?.id &&
+          i.nome.trim().toLowerCase() === nome.trim().toLowerCase()
       )
     )
       e.nome = "Já existe um insumo cadastrado com esse nome.";
@@ -118,16 +178,23 @@ export default function InsumoForm({
     const nomePropriedade = opcoesPropriedade.find(
       ([id]) => id === idPropriedade
     )?.[1];
+    const fabricante = fabricantes.find((f) => String(f.id_fabricante) === idFabricante);
+    const marca = marcas.find((m) => String(m.id_marca) === idMarca);
+    const fornecedor = fornecedores.find((f) => String(f.id_fornecedor) === idFornecedor);
 
     onSalvar({
       nome: nome.trim(),
       categoria: categoria as CategoriaInsumo,
+      id_categoria_insumo: idCategoria,
       tipo: tipo || undefined,
       unidade_medida: unidade,
-      fabricante: fabricante.trim() || undefined,
-      marca: marca.trim() || undefined,
-      fornecedor: fornecedor.trim() || undefined,
-      estoque_atual: num(estoqueInicial),
+      id_fabricante: fabricante?.id_fabricante,
+      fabricante: fabricante?.nome_fabricante,
+      id_marca: marca?.id_marca,
+      marca: marca?.descricao_marca,
+      id_fornecedor: fornecedor?.id_fornecedor,
+      fornecedor: fornecedor?.nome_fantasia || fornecedor?.nome_fornecedor,
+      estoque_atual: estoqueResumo,
       estoque_minimo: num(estoqueMinimo),
       valor_unitario: num(valorUnitario),
       status,
@@ -189,19 +256,35 @@ export default function InsumoForm({
         </Field>
 
         <Field label="Fabricante">
-          <Input
-            value={fabricante}
-            onChange={(e) => setFabricante(e.target.value)}
-            placeholder="Ex.: Mosaic"
-          />
+          <Select
+            value={idFabricante}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+              setIdFabricante(e.target.value)
+            }
+            placeholder="Selecione o fabricante"
+          >
+            {fabricantesVisiveis.map((f) => (
+              <option key={f.id_fabricante} value={f.id_fabricante}>
+                {f.nome_fabricante}
+              </option>
+            ))}
+          </Select>
         </Field>
 
         <Field label="Marca">
-          <Input
-            value={marca}
-            onChange={(e) => setMarca(e.target.value)}
-            placeholder="Ex.: Mosaic Fertilizantes"
-          />
+          <Select
+            value={idMarca}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+              setIdMarca(e.target.value)
+            }
+            placeholder="Selecione a marca"
+          >
+            {marcas.map((m) => (
+              <option key={m.id_marca} value={m.id_marca}>
+                {m.descricao_marca}
+              </option>
+            ))}
+          </Select>
         </Field>
 
         <Field label="Unidade de Medida" required>
@@ -212,7 +295,7 @@ export default function InsumoForm({
             }
             placeholder="Selecione a unidade"
           >
-            {UNIDADES_MEDIDA.map((u) => (
+            {unidadesDisponiveis.map((u) => (
               <option key={u} value={u}>
                 {u}
               </option>
@@ -224,17 +307,19 @@ export default function InsumoForm({
 
       {/* --------------------------------------------------- Controle de estoque */}
       <FormSection title="Controle de Estoque" cols={3}>
-        <Field label="Estoque Inicial">
-          <Input
-            type="number"
-            step="0.01"
-            min="0"
-            value={estoqueInicial}
-            onChange={(e) => setEstoqueInicial(e.target.value)}
-            placeholder="0,00"
-          />
-          <Erro campo="estoqueInicial" />
-        </Field>
+        {!modoEdicao && (
+          <Field label="Estoque Inicial">
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              value={estoqueInicial}
+              onChange={(e) => setEstoqueInicial(e.target.value)}
+              placeholder="0,00"
+            />
+            <Erro campo="estoqueInicial" />
+          </Field>
+        )}
 
         <Field label="Estoque Mínimo">
           <Input
@@ -283,17 +368,19 @@ export default function InsumoForm({
         </Field>
 
         <Field label="Fornecedor">
-          <Input
-            list="fornecedores-disponiveis"
-            value={fornecedor}
-            onChange={(e) => setFornecedor(e.target.value)}
-            placeholder="Ex.: Agro Insumos Ltda."
-          />
-          <datalist id="fornecedores-disponiveis">
-            {fornecedores.map((f) => (
-              <option key={f} value={f} />
+          <Select
+            value={idFornecedor}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+              setIdFornecedor(e.target.value)
+            }
+            placeholder="Selecione o fornecedor"
+          >
+            {fornecedoresVisiveis.map((f) => (
+              <option key={f.id_fornecedor} value={f.id_fornecedor}>
+                {f.nome_fantasia || f.nome_fornecedor}
+              </option>
             ))}
-          </datalist>
+          </Select>
         </Field>
 
         <Field label="Status" required>
@@ -336,10 +423,10 @@ export default function InsumoForm({
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
           <div>
             <p className="text-[11px] uppercase tracking-wide text-gray-400">
-              Estoque inicial
+              {modoEdicao ? "Estoque atual" : "Estoque inicial"}
             </p>
             <p className="text-lg font-bold text-gray-700">
-              {num(estoqueInicial).toLocaleString("pt-BR")} {unidade}
+              {estoqueResumo.toLocaleString("pt-BR")} {unidade}
             </p>
           </div>
           <div>
@@ -375,7 +462,7 @@ export default function InsumoForm({
           Cancelar
         </Button>
         <Button onClick={handleSalvar} disabled={salvando}>
-          {salvando ? "Salvando..." : "Salvar Insumo"}
+          {salvando ? "Salvando..." : modoEdicao ? "Salvar alterações" : "Salvar Insumo"}
         </Button>
       </div>
     </div>
