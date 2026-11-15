@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  getAtividades,
+  getAtividadesCadastradas,
   criarAtividade,
   atualizarAtividade,
   excluirAtividade,
@@ -38,8 +38,8 @@ export default function AtividadesModule() {
     isLoading,
     isError,
   } = useQuery({
-    queryKey: ["atividades"],
-    queryFn: getAtividades,
+    queryKey: ["atividades", "cadastradas"],
+    queryFn: getAtividadesCadastradas,
   });
 
   const invalidar = () => {
