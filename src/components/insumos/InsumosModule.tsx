@@ -10,6 +10,7 @@ import {
 } from "../../services/api";
 import {
   Insumo,
+  LoteInsumo,
   MovimentacaoEstoque,
   NovoInsumoPayload,
   NovaMovimentacaoPayload,
@@ -65,6 +66,16 @@ function aplicarMovimentacao(
       });
     }
   }
+  // descarte gravado só em memória (modo de demonstração)
+  if (mov.tipo === "Saída" && mov.numero_lote) {
+    const alvo = lotes.findIndex((l) => l.numero_lote === mov.numero_lote);
+    if (alvo >= 0) {
+      lotes[alvo] = {
+        ...lotes[alvo],
+        quantidade: Math.max(0, lotes[alvo].quantidade - Number(mov.quantidade)),
+      };
+    }
+  }
 
   return {
     ...insumo,
@@ -81,6 +92,7 @@ export default function InsumosModule() {
   const [movimentando, setMovimentando] = useState<{
     insumo: Insumo | null;
     tipo: TipoMovimentacao;
+    lote?: LoteInsumo;
   } | null>(null);
   const queryClient = useQueryClient();
 
@@ -186,6 +198,10 @@ export default function InsumosModule() {
       setSelecionado((atual) =>
         atual && atual.id === nova.id_insumo ? aplicarMovimentacao(atual, nova) : atual
       );
+      // gravada no backend: saldos e lotes passam a valer os de lá
+      if (!nova.id.startsWith("local-")) {
+        queryClient.invalidateQueries({ queryKey: ["insumos"] });
+      }
 
       const insumo = insumos.find((i) => i.id === nova.id_insumo);
       alert(
@@ -210,7 +226,22 @@ export default function InsumosModule() {
     setMovimentando({ insumo, tipo });
   };
 
-  const cabecalho = movimentando
+  const abrirDescarte = (insumo: Insumo, lote: LoteInsumo) => {
+    setSelecionado(null);
+    setMovimentando({ insumo, tipo: "Saída", lote });
+  };
+
+  // o detalhe acompanha os dados recarregados do backend
+  const insumoSelecionado = selecionado
+    ? insumos.find((i) => i.id === selecionado.id) ?? selecionado
+    : null;
+
+  const cabecalho = movimentando?.lote
+    ? {
+        titulo: "Descartar Lote Vencido",
+        descricao: `Retire do estoque o saldo do lote ${movimentando.lote.numero_lote}`,
+      }
+    : movimentando
     ? {
         titulo: `Registrar ${movimentando.tipo} de Estoque`,
         descricao:
@@ -323,18 +354,20 @@ export default function InsumosModule() {
                   insumos={insumos}
                   insumoInicial={movimentando.insumo}
                   tipoInicial={movimentando.tipo}
+                  loteDescarte={movimentando.lote}
                   onCancelar={() => setMovimentando(null)}
                   onSalvar={salvarMovimentacao}
                   salvando={salvandoMovimentacao}
                 />
-              ) : selecionado ? (
+              ) : insumoSelecionado ? (
                 <InsumoDetalhe
-                  insumo={selecionado}
+                  insumo={insumoSelecionado}
                   movimentacoes={movimentacoes}
                   onVoltar={() => setSelecionado(null)}
                   onMovimentar={abrirMovimentacao}
                   onEditar={editarInsumo}
                   onExcluir={setExcluindo}
+                  onDescartar={abrirDescarte}
                 />
               ) : aba === "dashboard" ? (
                 <InsumosDashboard

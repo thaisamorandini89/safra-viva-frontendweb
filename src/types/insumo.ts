@@ -2,6 +2,8 @@
 // Módulo de Gestão de Insumos — tipos de domínio
 // ---------------------------------------------------------------------------
 
+import { dataLocalISO } from "./atividade";
+
 /** Categorias de insumos e os produtos típicos de cada uma */
 export const CATEGORIAS_INSUMO = {
   Fertilizantes: [
@@ -139,6 +141,14 @@ export interface LoteInsumo {
   quantidade: number;
 }
 
+/** Lote afetado por uma movimentação e a quantidade que entrou nele ou saiu dele */
+export interface LoteMovimentado {
+  id_lote: string;
+  numero_lote: string;
+  data_validade?: string | null;
+  quantidade: number;
+}
+
 /** Entidade: MovimentacaoEstoque */
 export interface MovimentacaoEstoque {
   id: string;
@@ -165,6 +175,10 @@ export interface MovimentacaoEstoque {
   atividade?: string;
   destino?: string;
   observacao?: string;
+  lotes?: LoteMovimentado[];
+  unidade_medida?: string;
+  /** "Atividade": saída gerada pela conclusão de uma atividade */
+  origem?: "Manual" | "Atividade";
 }
 
 /** Entidade: Insumo */
@@ -241,6 +255,8 @@ export interface NovaMovimentacaoPayload {
   atividade?: string;
   destino?: string;
   observacao?: string;
+  /** Descarte: a saída retira só deste lote, mesmo vencido */
+  id_lote?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -250,7 +266,8 @@ export interface NovaMovimentacaoPayload {
 /** Janela padrão (em dias) para considerar um produto "próximo do vencimento" */
 export const DIAS_ALERTA_VALIDADE = 60;
 
-const hoje = () => new Date().toISOString().slice(0, 10);
+// data local, a mesma referência que o backend usa para o vencimento
+const hoje = () => dataLocalISO();
 
 /** Valor financeiro parado em estoque */
 export const valorEstoque = (i: Insumo) =>
@@ -301,6 +318,12 @@ export const lotesVencidos = (i: Insumo): LoteInsumo[] =>
     (l) => l.quantidade > 0 && l.data_validade && l.data_validade < hoje()
   );
 
+/** Saldo que pode sair numa saída comum: o estoque menos o que está em lotes vencidos */
+export function saldoUtilizavel(i: Insumo): number {
+  const vencido = lotesVencidos(i).reduce((s, l) => s + Number(l.quantidade || 0), 0);
+  return Math.max(0, Math.round((Number(i.estoque_atual || 0) - vencido) * 1000) / 1000);
+}
+
 /** Valor da movimentação (quantidade × valor unitário) */
 export const valorMovimentacao = (m: MovimentacaoEstoque) =>
   Number(m.quantidade || 0) * Number(m.valor_unitario || 0);
@@ -319,3 +342,12 @@ export const fmtQtd = (v: number, unidade?: string) =>
 
 export const fmtData = (iso?: string | null) =>
   iso ? new Date(`${iso}T00:00:00`).toLocaleDateString("pt-BR") : "—";
+
+/** Lotes em que a movimentação entrou ou de que saiu, para exibição */
+export function lotesDaMovimentacao(m: MovimentacaoEstoque, unidade?: string): string {
+  const lotes = m.lotes ?? [];
+  if (!lotes.length) return m.numero_lote ?? "";
+  if (lotes.length === 1 && lotes[0].quantidade === Number(m.quantidade))
+    return lotes[0].numero_lote;
+  return lotes.map((l) => `${l.numero_lote} (${fmtQtd(l.quantidade, unidade)})`).join(", ");
+}

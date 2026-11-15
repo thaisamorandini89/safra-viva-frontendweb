@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import {
   Insumo,
+  LoteInsumo,
   MovimentacaoEstoque,
   TipoMovimentacao,
   CATEGORIA_INSUMO_META,
@@ -13,6 +14,7 @@ import {
   fmtMoeda,
   fmtQtd,
   fmtData,
+  lotesDaMovimentacao,
 } from "../../types/insumo";
 import Button from "../ui/Button";
 import InsumoStatusBadge from "./InsumoStatusBadge";
@@ -24,6 +26,7 @@ interface Props {
   onMovimentar: (insumo: Insumo, tipo: TipoMovimentacao) => void;
   onEditar: (i: Insumo) => void;
   onExcluir: (i: Insumo) => void;
+  onDescartar: (i: Insumo, lote: LoteInsumo) => void;
 }
 
 export default function InsumoDetalhe({
@@ -33,6 +36,7 @@ export default function InsumoDetalhe({
   onMovimentar,
   onEditar,
   onExcluir,
+  onDescartar,
 }: Props) {
   const historico = useMemo(
     () =>
@@ -186,12 +190,14 @@ export default function InsumoDetalhe({
                 <th className="px-4 py-3 font-semibold">Validade</th>
                 <th className="px-4 py-3 font-semibold text-right">Quantidade</th>
                 <th className="px-4 py-3 font-semibold">Situação</th>
+                <th className="px-4 py-3 font-semibold text-right">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {(i.lotes ?? []).map((l) => {
                 const diasLote = diasParaVencer(l.data_validade);
-                const vencido = diasLote != null && diasLote < 0;
+                const esgotado = l.quantidade <= 0;
+                const vencido = !esgotado && diasLote != null && diasLote < 0;
                 return (
                   <tr key={l.id} className="hover:bg-green-50/40 transition-colors">
                     <td className="px-4 py-3">
@@ -209,26 +215,37 @@ export default function InsumoDetalhe({
                     <td className="px-4 py-3">
                       <span
                         className={`inline-flex items-center gap-1 rounded-full border text-[10px] font-semibold px-1.5 py-0.5 ${
-                          vencido
+                          esgotado
+                            ? "bg-gray-50 text-gray-500 border-gray-200"
+                            : vencido
                             ? "bg-red-50 text-red-600 border-red-200"
                             : diasLote != null && diasLote <= 60
                             ? "bg-amber-50 text-amber-700 border-amber-200"
                             : "bg-green-50 text-green-700 border-green-200"
                         }`}
                       >
-                        {vencido
+                        {esgotado
+                          ? "Esgotado"
+                          : vencido
                           ? "⛔ Vencido"
                           : diasLote != null && diasLote <= 60
                           ? "⏰ A vencer"
                           : "✅ Válido"}
                       </span>
                     </td>
+                    <td className="px-4 py-3 text-right">
+                      {vencido && (
+                        <Button variant="ghost" onClick={() => onDescartar(i, l)}>
+                          🗑️ Descartar
+                        </Button>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
               {!(i.lotes ?? []).length && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center text-sm text-gray-400">
+                  <td colSpan={6} className="px-4 py-10 text-center text-sm text-gray-400">
                     Nenhum lote registrado para este produto.
                   </td>
                 </tr>
@@ -274,6 +291,7 @@ export default function InsumoDetalhe({
             <tbody className="divide-y divide-gray-100">
               {historico.map((m) => {
                 const entrada = m.tipo === "Entrada";
+                const lotes = lotesDaMovimentacao(m, i.unidade_medida);
                 return (
                   <tr key={m.id} className="hover:bg-green-50/40 transition-colors">
                     <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
@@ -304,6 +322,7 @@ export default function InsumoDetalhe({
                         : `${m.destino ?? m.atividade ?? "—"}${
                             m.codigo_talhao ? ` · ${m.codigo_talhao}` : ""
                           }`}
+                      {lotes && <div className="text-xs text-gray-400">Lote {lotes}</div>}
                     </td>
                     <td className="px-4 py-3 text-gray-600">{m.responsavel ?? "—"}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-gray-700">

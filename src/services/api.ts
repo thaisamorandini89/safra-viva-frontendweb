@@ -402,7 +402,7 @@ export async function getStatusAtividadeOpcoes(): Promise<string[]> {
 // ---------------------------------------------------------------------------
 
 /** Normaliza o retorno do backend para o tipo AtividadeAgricola do frontend */
-function mapAtividade(raw: any): AtividadeAgricola {
+export function mapAtividade(raw: any): AtividadeAgricola {
   return {
     id: String(raw?.id_atividade_agricola ?? raw?.id ?? ''),
     id_empresa: raw?.id_empresa ?? null,
@@ -431,6 +431,8 @@ function mapAtividade(raw: any): AtividadeAgricola {
           quantidade: Number(i?.quantidade ?? 0),
           unidade: i?.unidade ?? '',
           custo: i?.custo != null ? Number(i.custo) : undefined,
+          baixado: i?.baixado === true,
+          id_movimentacao: i?.id_movimentacao ?? null,
         }))
       : [],
     maquinas: Array.isArray(raw?.maquinas)
@@ -442,6 +444,17 @@ function mapAtividade(raw: any): AtividadeAgricola {
         }))
       : [],
     observacoes: raw?.observacoes,
+    baixa_estoque: {
+      geradas: Number(raw?.baixa_estoque?.geradas ?? 0),
+      pendentes: Array.isArray(raw?.baixa_estoque?.pendentes)
+        ? raw.baixa_estoque.pendentes.map((p: any) => ({
+            id_insumo: p?.id_insumo,
+            nome: p?.nome ?? '',
+            quantidade: Number(p?.quantidade ?? 0),
+            disponivel: Number(p?.disponivel ?? 0),
+          }))
+        : [],
+    },
   };
 }
 
@@ -605,6 +618,16 @@ export async function getMovimentacoes(): Promise<MovimentacaoEstoque[]> {
     console.warn('[insumos] movimentações indisponíveis — usando dados de demonstração.');
     return MOVIMENTACOES_MOCK;
   }
+}
+
+/** Saídas de estoque vinculadas a uma atividade, automáticas e manuais */
+export async function getMovimentacoesDaAtividade(
+  idAtividade: string
+): Promise<MovimentacaoEstoque[]> {
+  const { data } = await api.get<unknown[]>('/api/movimentacoes', {
+    params: { id_atividade_agricola: idAtividade },
+  });
+  return Array.isArray(data) ? data.map(movimentacaoDaApi) : [];
 }
 
 export async function criarMovimentacao(

@@ -9,6 +9,7 @@ import {
   fmtMoeda,
   fmtQtd,
   fmtData,
+  lotesDaMovimentacao,
 } from "../../types/insumo";
 import Button from "../ui/Button";
 
@@ -116,7 +117,7 @@ export default function MovimentacoesLista({
       m.responsavel ?? "",
       m.fornecedor ?? "",
       m.nota_fiscal ?? "",
-      m.numero_lote ?? "",
+      lotesDaMovimentacao(m, mapaInsumos.get(m.id_insumo)?.unidade_medida),
       `${m.codigo_talhao ?? ""} ${m.nome_talhao ?? ""}`.trim(),
       m.safra ?? "",
       m.atividade ?? "",
@@ -259,6 +260,7 @@ export default function MovimentacoesLista({
               {filtradas.map((m) => {
                 const insumo = mapaInsumos.get(m.id_insumo);
                 const entrada = m.tipo === "Entrada";
+                const lotes = lotesDaMovimentacao(m, insumo?.unidade_medida);
                 return (
                   <tr key={m.id} className="hover:bg-green-50/40 transition-colors">
                     <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
@@ -281,9 +283,7 @@ export default function MovimentacoesLista({
                           ? `${CATEGORIA_INSUMO_META[insumo.categoria].icone} ${insumo.nome}`
                           : m.nome_insumo ?? m.id_insumo}
                       </div>
-                      {m.numero_lote && (
-                        <div className="text-xs text-gray-400">Lote {m.numero_lote}</div>
-                      )}
+                      {lotes && <div className="text-xs text-gray-400">Lote {lotes}</div>}
                     </td>
                     <td
                       className={`px-4 py-3 text-right tabular-nums font-semibold ${
@@ -304,6 +304,11 @@ export default function MovimentacoesLista({
                       ) : (
                         <>
                           <div>{m.destino ?? m.atividade ?? "—"}</div>
+                          {m.origem === "Atividade" && (
+                            <div className="text-[10px] font-semibold text-sky-700">
+                              ⚙️ Baixa automática da atividade
+                            </div>
+                          )}
                           <div className="text-xs text-gray-400">
                             {m.codigo_talhao ? `${m.codigo_talhao} · ` : ""}
                             {m.safra ?? ""}

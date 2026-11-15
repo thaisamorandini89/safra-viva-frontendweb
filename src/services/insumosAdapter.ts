@@ -47,7 +47,14 @@ export function insumoDaApi(raw: any): Insumo {
     registro_mapa: texto(raw?.registro_mapa),
     ficha_tecnica: texto(raw?.ficha_tecnica),
     observacoes: texto(raw?.observacoes),
-    lotes: [],
+    lotes: (Array.isArray(raw?.lotes) ? raw.lotes : []).map((l: any) => ({
+      id: String(l?.id_lote ?? ""),
+      id_insumo: String(raw?.id_insumo ?? ""),
+      numero_lote: l?.numero_lote ?? "",
+      data_fabricacao: l?.data_fabricacao ?? null,
+      data_validade: l?.data_validade ?? null,
+      quantidade: Number(l?.quantidade ?? 0),
+    })),
   };
 }
 
@@ -81,6 +88,8 @@ export function movimentacaoDaApi(raw: any): MovimentacaoEstoque {
     id_insumo: String(raw?.id_insumo ?? ""),
     nome_insumo: texto(raw?.nome_produto),
     tipo: raw?.tipo_movimentacao === "SAIDA" ? "Saída" : "Entrada",
+    origem: raw?.origem === "ATIVIDADE" ? "Atividade" : "Manual",
+    unidade_medida: texto(raw?.unidade_medida),
     quantidade: Number(raw?.quantidade ?? 0),
     valor_unitario: numero(raw?.valor_unitario),
     data_movimentacao: String(raw?.data_movimentacao ?? "").slice(0, 10),
@@ -99,6 +108,12 @@ export function movimentacaoDaApi(raw: any): MovimentacaoEstoque {
     atividade: texto(raw?.atividade_descricao),
     destino: texto(raw?.destino_finalidade),
     observacao: texto(raw?.observacao),
+    lotes: (Array.isArray(raw?.lotes) ? raw.lotes : []).map((l: any) => ({
+      id_lote: String(l?.id_lote ?? ""),
+      numero_lote: l?.numero_lote ?? "",
+      data_validade: l?.data_validade ?? null,
+      quantidade: Number(l?.quantidade ?? 0),
+    })),
   };
 }
 
@@ -131,6 +146,7 @@ export function movimentacaoParaApi(dados: NovaMovimentacaoPayload) {
     safra: dados.safra,
     id_atividade_agricola: numero(dados.id_atividade),
     destino_finalidade: dados.destino,
+    id_lote: numero(dados.id_lote),
   };
 }
 

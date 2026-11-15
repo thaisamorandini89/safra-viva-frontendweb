@@ -99,6 +99,19 @@ describe("insumoDaApi", () => {
     expect(i.id_propriedade).toBeUndefined();
     expect(i.nome_propriedade).toBeUndefined();
   });
+
+  it("traduz os lotes do insumo", () => {
+    const i = insumoDaApi({
+      ...raw,
+      lotes: [
+        { id_lote: 3, numero_lote: "L-1", data_fabricacao: null, data_validade: "2027-01-01", quantidade: 4.5 },
+      ],
+    });
+
+    expect(i.lotes).toEqual([
+      { id: "3", id_insumo: "6", numero_lote: "L-1", data_fabricacao: null, data_validade: "2027-01-01", quantidade: 4.5 },
+    ]);
+  });
 });
 
 describe("insumoParaApi", () => {
@@ -234,6 +247,35 @@ describe("movimentacaoDaApi", () => {
     expect(m.id_atividade).toBeUndefined();
     expect(m.atividade).toBeUndefined();
   });
+
+  it("traduz os lotes afetados pela movimentação", () => {
+    const m = movimentacaoDaApi({
+      id_movimentacao: "ghi",
+      id_insumo: 6,
+      tipo_movimentacao: "SAIDA",
+      quantidade: 5,
+      lotes: [
+        { id_lote: 1, numero_lote: "L-1", data_validade: "2027-01-01", quantidade: 1 },
+        { id_lote: 2, numero_lote: "L-2", data_validade: null, quantidade: 4 },
+      ],
+    });
+
+    expect(m.lotes).toEqual([
+      { id_lote: "1", numero_lote: "L-1", data_validade: "2027-01-01", quantidade: 1 },
+      { id_lote: "2", numero_lote: "L-2", data_validade: null, quantidade: 4 },
+    ]);
+    expect(movimentacaoDaApi({ id_movimentacao: "jkl" }).lotes).toEqual([]);
+  });
+
+  it("identifica a saída gerada pela conclusão de uma atividade", () => {
+    const base = { id_movimentacao: "mno", tipo_movimentacao: "SAIDA", unidade_medida: "kg" };
+    expect(movimentacaoDaApi({ ...base, origem: "ATIVIDADE" })).toMatchObject({
+      origem: "Atividade",
+      unidade_medida: "kg",
+    });
+    expect(movimentacaoDaApi({ ...base, origem: "MANUAL" }).origem).toBe("Manual");
+    expect(movimentacaoDaApi(base).origem).toBe("Manual");
+  });
 });
 
 describe("movimentacaoParaApi", () => {
@@ -301,6 +343,16 @@ describe("movimentacaoParaApi", () => {
     const p = movimentacaoParaApi({ ...base, destino: "Cocho" }) as any;
     expect(p.id_talhao).toBeUndefined();
     expect(p.id_atividade_agricola).toBeUndefined();
+  });
+
+  it("envia o lote do descarte numa saída e nunca numa entrada", () => {
+    const descarte = movimentacaoParaApi({ ...base, id_lote: "9", numero_lote: "L-9" });
+    expect(descarte).toMatchObject({ id_lote: 9 });
+    expect(descarte).not.toHaveProperty("numero_lote");
+
+    expect(movimentacaoParaApi({ ...base, tipo: "Entrada", id_lote: "9" })).not.toHaveProperty(
+      "id_lote"
+    );
   });
 });
 
