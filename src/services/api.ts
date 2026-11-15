@@ -18,6 +18,12 @@ import { TALHOES_MOCK } from './talhoesMock';
 import { ATIVIDADES_MOCK } from './atividadesMock';
 import { INSUMOS_MOCK_ESTOQUE, MOVIMENTACOES_MOCK } from './insumosMock';
 import {
+  insumoDaApi,
+  movimentacaoDaApi,
+  movimentacaoParaApi,
+  erroDoBackend,
+} from './insumosAdapter';
+import {
   SafraIAConsultaPayload,
   SafraIAResposta,
 } from '../types/safraIA';
@@ -135,11 +141,16 @@ function mapTalhao(raw: any): Talhao {
   };
 }
 
+/** Talhões cadastrados, sem dados de demonstração; propaga a falha da API */
+export async function getTalhoesCadastrados(): Promise<Talhao[]> {
+  const { data } = await api.get<unknown[]>('/api/talhoes');
+  return Array.isArray(data) ? data.map(mapTalhao) : [];
+}
+
 export async function getTalhoes(): Promise<Talhao[]> {
   try {
-    const { data } = await api.get<unknown[]>('/api/talhoes');
-    if (Array.isArray(data) && data.length) return data.map(mapTalhao);
-    return TALHOES_MOCK;
+    const cadastrados = await getTalhoesCadastrados();
+    return cadastrados.length ? cadastrados : TALHOES_MOCK;
   } catch {
     console.warn('[talhoes] endpoint indisponível — usando dados de demonstração.');
     return TALHOES_MOCK;
@@ -281,6 +292,13 @@ export interface FuncionarioAPI {
   status?: boolean;
 }
 
+export interface FornecedorAPI {
+  id_fornecedor: number;
+  nome_fornecedor: string;
+  nome_fantasia?: string | null;
+  status?: boolean;
+}
+
 export interface AtividadeIndicadores {
   total: number;
   custo_total: number;
@@ -357,6 +375,17 @@ export async function getFuncionarios(): Promise<FuncionarioAPI[]> {
   }
 }
 
+/** Lista os fornecedores cadastrados */
+export async function getFornecedores(): Promise<FornecedorAPI[]> {
+  try {
+    const { data } = await api.get<FornecedorAPI[]>('/api/fornecedores');
+    return Array.isArray(data) ? data : [];
+  } catch {
+    console.warn('[fornecedores] endpoint indisponível.');
+    return [];
+  }
+}
+
 /** Opções de status aceitas pela atividade (para o combo do formulário) */
 export async function getStatusAtividadeOpcoes(): Promise<string[]> {
   try {
@@ -415,11 +444,15 @@ function mapAtividade(raw: any): AtividadeAgricola {
   };
 }
 
+/** Atividades cadastradas, sem dados de demonstração; propaga a falha da API */
+export async function getAtividadesCadastradas(): Promise<AtividadeAgricola[]> {
+  const { data } = await api.get<any[]>('/api/atividades');
+  return Array.isArray(data) ? data.map(mapAtividade) : [];
+}
+
 export async function getAtividades(): Promise<AtividadeAgricola[]> {
   try {
-    const { data } = await api.get<any[]>('/api/atividades');
-    if (Array.isArray(data)) return data.map(mapAtividade);
-    return ATIVIDADES_MOCK;
+    return await getAtividadesCadastradas();
   } catch {
     console.warn('[atividades] endpoint indisponível — usando dados de demonstração.');
     return ATIVIDADES_MOCK;
@@ -463,11 +496,16 @@ export async function excluirAtividade(id: string): Promise<void> {
 // Insumos e movimentações de estoque
 // ---------------------------------------------------------------------------
 
+/** Insumos cadastrados, sem dados de demonstração; propaga a falha da API */
+export async function getInsumosCadastrados(): Promise<Insumo[]> {
+  const { data } = await api.get<unknown[]>('/api/insumos');
+  return Array.isArray(data) ? data.map(insumoDaApi) : [];
+}
+
 export async function getInsumos(): Promise<Insumo[]> {
   try {
-    const { data } = await api.get<Insumo[]>('/api/insumos');
-    if (Array.isArray(data) && data.length) return data;
-    return INSUMOS_MOCK_ESTOQUE;
+    const cadastrados = await getInsumosCadastrados();
+    return cadastrados.length ? cadastrados : INSUMOS_MOCK_ESTOQUE;
   } catch {
     console.warn('[insumos] endpoint indisponível — usando dados de demonstração.');
     return INSUMOS_MOCK_ESTOQUE;
@@ -486,8 +524,8 @@ export async function criarInsumo(dados: NovoInsumoPayload): Promise<Insumo> {
 
 export async function getMovimentacoes(): Promise<MovimentacaoEstoque[]> {
   try {
-    const { data } = await api.get<MovimentacaoEstoque[]>('/api/movimentacoes-estoque');
-    if (Array.isArray(data) && data.length) return data;
+    const { data } = await api.get<unknown[]>('/api/movimentacoes');
+    if (Array.isArray(data) && data.length) return data.map(movimentacaoDaApi);
     return MOVIMENTACOES_MOCK;
   } catch {
     console.warn('[insumos] movimentações indisponíveis — usando dados de demonstração.');
@@ -499,12 +537,11 @@ export async function criarMovimentacao(
   dados: NovaMovimentacaoPayload
 ): Promise<MovimentacaoEstoque> {
   try {
-    const { data } = await api.post<MovimentacaoEstoque>(
-      '/api/movimentacoes-estoque',
-      dados
-    );
-    return data;
-  } catch {
+    const { data } = await api.post('/api/movimentacoes', movimentacaoParaApi(dados));
+    return movimentacaoDaApi(data);
+  } catch (e) {
+    const erro = erroDoBackend(e);
+    if (erro) throw erro;
     // Fallback local: gera uma movimentação "salva" apenas em memória
     return { ...dados, id: `local-${Date.now()}` } as MovimentacaoEstoque;
   }

@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  getTalhoes,
+  getTalhoesCadastrados,
   getCategoriasAtividade,
   getTiposAtividade,
   getFuncionarios,
   getMaquinas,
-  getInsumos,
+  getInsumosCadastrados,
   getStatusAtividadeOpcoes,
 } from "../../services/api";
 import { Talhao } from "../../types/talhao";
@@ -83,14 +83,14 @@ export default function AtividadeForm({
     queryFn: getMaquinas,
   });
 
-  const { data: catalogoInsumos = [] as any[] } = useQuery<any[]>({
-    queryKey: ["insumos"],
-    queryFn: getInsumos as any,
+  const { data: catalogoInsumos = [] } = useQuery({
+    queryKey: ["insumos", "cadastrados"],
+    queryFn: getInsumosCadastrados,
   });
 
   const { data: talhoes = [] } = useQuery({
-    queryKey: ["talhoes"],
-    queryFn: getTalhoes,
+    queryKey: ["talhoes", "cadastrados"],
+    queryFn: getTalhoesCadastrados,
   });
 
   const { data: statusOpcoes = STATUS_ATIVIDADE as unknown as string[] } = useQuery({
@@ -151,6 +151,18 @@ export default function AtividadeForm({
     [atividades]
   );
 
+  // itens inativos saem dos combos, exceto o que já está selecionado na edição
+  const ativo = (status: unknown) => status !== false && status !== "Inativo";
+  const categoriasVisiveis = categorias.filter(
+    (c) => ativo(c.status) || String(c.id_categoria_atividade) === idCategoria
+  );
+  const tiposVisiveis = tipos.filter(
+    (t) => ativo(t.status) || String(t.id_atividade) === idTipo
+  );
+  const funcionariosVisiveis = funcionarios.filter(
+    (f) => ativo(f.status) || f.id_funcionario === idResponsavel
+  );
+
   const custoInsumos = insumos.reduce((s, i) => s + Number(i.custo || 0), 0);
   const custoMaquinas = maquinas.reduce((s, m) => s + Number(m.custo || 0), 0);
   const custoCalculado = custoInsumos + custoMaquinas;
@@ -164,11 +176,11 @@ export default function AtividadeForm({
     setInsumos((l) =>
       l.map((item, idx) => {
         if (idx !== i) return item;
-        const cat = catalogoInsumos.find((c: any) => String(c.id_insumo) === idInsumo);
+        const cat = catalogoInsumos.find((c) => c.id === idInsumo);
         return {
           ...item,
           id_insumo: idInsumo ? Number(idInsumo) : undefined,
-          nome: cat?.nome_produto ?? cat?.nome ?? "",
+          nome: cat?.nome ?? "",
           unidade: cat?.unidade_medida ?? item.unidade,
         };
       })
@@ -225,6 +237,20 @@ export default function AtividadeForm({
     if (maquinas.some((m) => !m.id_maquina))
       e.maquinas = "Selecione a máquina em todos os itens adicionados.";
 
+    if (idTalhao && idTipo && dataInicio) {
+      const duplicada = atividades.some(
+        (a) =>
+          a.id !== atividadeEdicao?.id &&
+          a.id_talhao === idTalhao &&
+          String(a.id_tipo_atividade) === idTipo &&
+          a.data_inicio === dataInicio
+      );
+      if (duplicada) {
+        e.duplicada =
+          "Já existe uma atividade deste tipo para o mesmo talhão e data de início. Altere o tipo, o talhão ou a data.";
+      }
+    }
+
     setErros(e);
     return Object.keys(e).length === 0;
   };
@@ -265,6 +291,15 @@ export default function AtividadeForm({
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 lg:p-8">
+      {erros.duplicada && (
+        <div className="mb-5 rounded-lg border border-red-200 bg-red-50 p-4">
+          <p className="text-sm font-semibold text-red-700 flex items-center gap-2">
+            <span aria-hidden>⚠️</span>
+            {erros.duplicada}
+          </p>
+        </div>
+      )}
+
       {/* -------------------------------------------------- Operação executada */}
       <FormSection title="Operação" cols={3}>
         <Field label="Categoria" required>
@@ -276,7 +311,7 @@ export default function AtividadeForm({
             }}
             placeholder="Selecione a categoria"
           >
-            {categorias.map((c) => (
+            {categoriasVisiveis.map((c) => (
               <option key={c.id_categoria_atividade} value={c.id_categoria_atividade}>
                 {c.nome}
               </option>
@@ -292,7 +327,7 @@ export default function AtividadeForm({
             placeholder={idCategoria ? "Selecione o tipo" : "Selecione a categoria primeiro"}
             disabled={!idCategoria}
           >
-            {tipos.map((t) => (
+            {tiposVisiveis.map((t) => (
               <option key={t.id_atividade} value={t.id_atividade}>
                 {t.descricao}
               </option>
@@ -353,7 +388,7 @@ export default function AtividadeForm({
             }
             placeholder="Selecione o responsável"
           >
-            {funcionarios.map((f) => (
+            {funcionariosVisiveis.map((f) => (
               <option key={f.id_funcionario} value={f.id_funcionario}>
                 {f.nome_completo}
                 {f.cargo ? ` — ${f.cargo}` : ""}
@@ -411,11 +446,13 @@ export default function AtividadeForm({
                 }
                 placeholder="Selecione o insumo"
               >
-                {catalogoInsumos.map((c: any) => (
-                  <option key={c.id_insumo} value={c.id_insumo}>
-                    {c.nome_produto}
-                  </option>
-                ))}
+                {catalogoInsumos
+                  .filter((c) => ativo(c.status) || c.id === String(item.id_insumo))
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nome}
+                    </option>
+                  ))}
               </Select>
             </Field>
             <Field label="Quantidade" className="sm:col-span-2">
@@ -473,11 +510,13 @@ export default function AtividadeForm({
                 }
                 placeholder="Selecione a máquina"
               >
-                {catalogoMaquinas.map((c: any) => (
-                  <option key={c.id_maquina} value={c.id_maquina}>
-                    {c.nome}
-                  </option>
-                ))}
+                {catalogoMaquinas
+                  .filter((c) => ativo(c.status) || c.id_maquina === item.id_maquina)
+                  .map((c) => (
+                    <option key={c.id_maquina} value={c.id_maquina}>
+                      {c.nome}
+                    </option>
+                  ))}
               </Select>
             </Field>
             <Field label="Horas" className="sm:col-span-2">

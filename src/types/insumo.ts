@@ -148,7 +148,7 @@ export interface MovimentacaoEstoque {
   quantidade: number;
   valor_unitario?: number;
   data_movimentacao: string; // ISO yyyy-mm-dd
-  id_responsavel: number;
+  id_responsavel: string; // UUID do funcionário
   responsavel?: string;
   /** Entrada */
   fornecedor?: string;
@@ -217,8 +217,9 @@ export interface NovaMovimentacaoPayload {
   quantidade: number;
   valor_unitario?: number;
   data_movimentacao: string;
-  id_responsavel: number;
+  id_responsavel: string; // UUID do funcionário
   responsavel?: string;
+  id_fornecedor?: number;
   fornecedor?: string;
   nota_fiscal?: string;
   numero_lote?: string;
