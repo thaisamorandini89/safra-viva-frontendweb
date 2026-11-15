@@ -208,7 +208,25 @@ export interface Insumo {
 }
 
 /** Payload de criação do insumo */
+/** Produto do cadastro, para criar um insumo a partir dele */
+export interface ProdutoCadastrado {
+  id_produto: number;
+  nome: string;
+  categoria: CategoriaInsumo;
+  tipo?: string;
+  unidade_medida: string;
+  id_fabricante?: number;
+  id_marca?: number;
+  id_fornecedor?: number;
+  registro_mapa?: string;
+  ficha_tecnica?: string;
+  observacoes?: string;
+  ativo: boolean;
+}
+
 export interface NovoInsumoPayload {
+  /** Produto já cadastrado; sem ele, o cadastro cria um produto novo */
+  id_produto?: number;
   nome: string;
   categoria: CategoriaInsumo;
   id_categoria_insumo?: number;

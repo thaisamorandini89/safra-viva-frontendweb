@@ -114,6 +114,37 @@ describe("insumoDaApi", () => {
   });
 });
 
+describe("insumoParaApi com produto existente", () => {
+  const form: NovoInsumoPayload = {
+    id_produto: 9,
+    nome: "Ureia 45%",
+    categoria: "Fertilizantes",
+    id_categoria_insumo: 2,
+    unidade_medida: "kg",
+    estoque_atual: 0,
+    estoque_minimo: 5,
+    valor_unitario: 4.1,
+    status: "Ativo",
+  };
+
+  it("na criação envia só o id do produto, sem produto novo", () => {
+    expect(insumoParaApi(form)).toEqual({
+      id_produto: 9,
+      estoque_minimo: 5,
+      valor_unitario: 4.1,
+      id_propriedade: null,
+      status: true,
+      estoque_atual: 0,
+    });
+  });
+
+  it("na edição continua enviando os dados do produto", () => {
+    const enviado = insumoParaApi(form, true) as Record<string, unknown>;
+    expect(enviado.id_produto).toBeUndefined();
+    expect(enviado.produto).toMatchObject({ nome_produto: "Ureia 45%" });
+  });
+});
+
 describe("insumoParaApi", () => {
   const form: NovoInsumoPayload = {
     nome: "Ureia 45%",
