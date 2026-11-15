@@ -1,6 +1,11 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getSafras, getCentrosCusto, getTalhoes } from "../../services/api";
+import {
+  getSafras,
+  getCentrosCusto,
+  getTalhoes,
+  getPropriedadesLista,
+} from "../../services/api";
 import {
   Lancamento,
   NovoLancamentoPayload,
@@ -55,6 +60,18 @@ export default function LancamentoForm({
     queryKey: ["talhoes"],
     queryFn: () => getTalhoes(),
   });
+  const { data: propriedadesApi = [] } = useQuery<any[]>({
+    queryKey: ["propriedades"],
+    queryFn: getPropriedadesLista,
+  });
+
+  // Só safras e centros ativos entram nos combos, além do já usado na edição
+  const safrasAtivas = safras.filter(
+    (s) => s.status !== false || s.id_safra === inicial?.id_safra
+  );
+  const centrosAtivos = centros.filter(
+    (c) => c.status !== false || c.id_centro_custo === inicial?.id_centro_custo
+  );
 
   const talhoes: TalhaoOpc[] = useMemo(
     () =>
@@ -67,11 +84,17 @@ export default function LancamentoForm({
 
   const propriedades = useMemo(() => {
     const mapa = new Map<number, string>();
-    safras.forEach((s) =>
-      mapa.set(s.id_propriedade, s.nome_propriedade ?? `Propriedade ${s.id_propriedade}`)
-    );
+    propriedadesApi.forEach((p: any) => {
+      const id = Number(p.id_propriedade ?? p.id);
+      if (id > 0) mapa.set(id, p.nome_propriedade ?? p.nome ?? `Propriedade ${id}`);
+    });
+    // Garante a propriedade das safras listadas (ex.: dados de demonstração)
+    safras.forEach((s) => {
+      if (!mapa.has(s.id_propriedade))
+        mapa.set(s.id_propriedade, s.nome_propriedade ?? `Propriedade ${s.id_propriedade}`);
+    });
     return Array.from(mapa, ([id, nome]) => ({ id, nome }));
-  }, [safras]);
+  }, [propriedadesApi, safras]);
 
   const [tipo, setTipo] = useState<TipoLancamento>(inicial?.tipo ?? "DESPESA");
   const [categoria, setCategoria] = useState(inicial?.categoria ?? "");
@@ -252,12 +275,17 @@ export default function LancamentoForm({
             placeholder="Nenhuma"
             onChange={(e) => setIdSafra(e.target.value)}
           >
-            {safras.map((s) => (
+            {safrasAtivas.map((s) => (
               <option key={s.id_safra} value={s.id_safra}>
                 {s.nome}
               </option>
             ))}
           </Select>
+          {safrasAtivas.length === 0 && (
+            <p className="mt-1 text-xs text-gray-500">
+              Nenhuma safra ativa cadastrada. Cadastre na aba Safras.
+            </p>
+          )}
         </Field>
         {!usaRateio && (
           <Field label="Talhão">
@@ -281,12 +309,17 @@ export default function LancamentoForm({
               placeholder="Nenhum"
               onChange={(e) => setIdCentro(e.target.value)}
             >
-              {centros.map((c) => (
+              {centrosAtivos.map((c) => (
                 <option key={c.id_centro_custo} value={c.id_centro_custo}>
                   {c.nome} ({c.tipo === "OPERACIONAL" ? "Operacional" : "Administrativo"})
                 </option>
               ))}
             </Select>
+            {centrosAtivos.length === 0 && (
+              <p className="mt-1 text-xs text-gray-500">
+                Nenhum centro de custo ativo cadastrado. Cadastre na aba Centros de Custo.
+              </p>
+            )}
           </Field>
         )}
       </div>
