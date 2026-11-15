@@ -5,6 +5,7 @@ import {
   Insumo,
   MovimentacaoEstoque,
   NovaMovimentacaoPayload,
+  NovoInsumoPayload,
   categoriaDoProduto,
 } from "../types/insumo";
 
@@ -26,17 +27,52 @@ export function insumoDaApi(raw: any): Insumo {
   const nome = raw?.nome_produto ?? "";
   return {
     id: String(raw?.id_insumo ?? ""),
+    id_produto: numero(raw?.id_produto),
     nome,
     categoria: categoriaConhecida(raw?.categoria_nome, nome),
+    tipo: texto(raw?.subcategoria),
     unidade_medida: raw?.unidade_medida ?? "",
+    id_fabricante: numero(raw?.id_fabricante),
     fabricante: texto(raw?.fabricante_nome),
+    id_marca: numero(raw?.id_marca),
     marca: texto(raw?.descricao_marca),
+    id_fornecedor: numero(raw?.id_fornecedor),
+    fornecedor: texto(raw?.fornecedor_nome),
     estoque_atual: Number(raw?.estoque_atual ?? 0),
     estoque_minimo: Number(raw?.estoque_minimo ?? 0),
     valor_unitario: Number(raw?.valor_unitario ?? 0),
     status: raw?.status === false ? "Inativo" : "Ativo",
+    id_propriedade: numero(raw?.id_propriedade),
+    nome_propriedade: texto(raw?.nome_propriedade),
+    registro_mapa: texto(raw?.registro_mapa),
+    ficha_tecnica: texto(raw?.ficha_tecnica),
+    observacoes: texto(raw?.observacoes),
     lotes: [],
   };
+}
+
+export function insumoParaApi(dados: NovoInsumoPayload, edicao = false) {
+  const comuns = {
+    produto: {
+      nome_produto: dados.nome,
+      id_categoria_insumo: dados.id_categoria_insumo,
+      subcategoria: dados.tipo ?? null,
+      unidade_medida: dados.unidade_medida,
+      id_fabricante: dados.id_fabricante ?? null,
+      id_marca: dados.id_marca ?? null,
+      id_fornecedor: dados.id_fornecedor ?? null,
+      registro_mapa: dados.registro_mapa ?? null,
+      ficha_tecnica: dados.ficha_tecnica ?? null,
+      observacoes: dados.observacoes ?? null,
+    },
+    estoque_minimo: dados.estoque_minimo,
+    valor_unitario: dados.valor_unitario,
+    id_propriedade: dados.id_propriedade ?? null,
+    status: dados.status === "Ativo",
+  };
+
+  // na edição o saldo não é enviado: ele só muda por movimentação
+  return edicao ? comuns : { ...comuns, estoque_atual: dados.estoque_atual };
 }
 
 export function movimentacaoDaApi(raw: any): MovimentacaoEstoque {

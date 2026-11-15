@@ -1,11 +1,12 @@
 import { describe, it, expect } from "vitest";
 import {
   insumoDaApi,
+  insumoParaApi,
   movimentacaoDaApi,
   movimentacaoParaApi,
   erroDoBackend,
 } from "./insumosAdapter";
-import { NovaMovimentacaoPayload } from "../types/insumo";
+import { NovaMovimentacaoPayload, NovoInsumoPayload } from "../types/insumo";
 
 describe("insumoDaApi", () => {
   const raw = {
@@ -45,6 +46,123 @@ describe("insumoDaApi", () => {
 
   it("marca como inativo o insumo com status falso", () => {
     expect(insumoDaApi({ ...raw, status: false }).status).toBe("Inativo");
+  });
+
+  it("traduz os dados complementares do produto e a propriedade", () => {
+    const i = insumoDaApi({
+      ...raw,
+      id_produto: 1,
+      subcategoria: "Calcário",
+      id_fabricante: 3,
+      id_marca: 4,
+      descricao_marca: "Calcário Top",
+      id_fornecedor: 5,
+      fornecedor_nome: "Agro Insumos Ltda.",
+      registro_mapa: "MAPA-1",
+      ficha_tecnica: "ficha",
+      observacoes: "obs",
+      id_propriedade: 4,
+      nome_propriedade: "Fazenda Alegria",
+    });
+
+    expect(i).toMatchObject({
+      id_produto: 1,
+      tipo: "Calcário",
+      id_fabricante: 3,
+      id_marca: 4,
+      marca: "Calcário Top",
+      id_fornecedor: 5,
+      fornecedor: "Agro Insumos Ltda.",
+      registro_mapa: "MAPA-1",
+      ficha_tecnica: "ficha",
+      observacoes: "obs",
+      id_propriedade: 4,
+      nome_propriedade: "Fazenda Alegria",
+    });
+  });
+
+  it("deixa sem valor os vínculos que o backend devolve nulos ou vazios", () => {
+    const i = insumoDaApi({
+      ...raw,
+      id_fabricante: null,
+      fabricante_nome: "",
+      id_fornecedor: null,
+      fornecedor_nome: "",
+      id_propriedade: null,
+      nome_propriedade: "",
+    });
+
+    expect(i.id_fabricante).toBeUndefined();
+    expect(i.fabricante).toBeUndefined();
+    expect(i.id_fornecedor).toBeUndefined();
+    expect(i.fornecedor).toBeUndefined();
+    expect(i.id_propriedade).toBeUndefined();
+    expect(i.nome_propriedade).toBeUndefined();
+  });
+});
+
+describe("insumoParaApi", () => {
+  const form: NovoInsumoPayload = {
+    nome: "Ureia 45%",
+    categoria: "Fertilizantes",
+    id_categoria_insumo: 2,
+    tipo: "Ureia",
+    unidade_medida: "kg",
+    id_fabricante: 3,
+    fabricante: "Petrobras",
+    id_marca: 4,
+    marca: "Petrofértil",
+    id_fornecedor: 5,
+    fornecedor: "Agro Insumos Ltda.",
+    estoque_atual: 100,
+    estoque_minimo: 20,
+    valor_unitario: 4.1,
+    status: "Ativo",
+    id_propriedade: 4,
+    nome_propriedade: "Fazenda Alegria",
+    registro_mapa: "MAPA-1",
+  };
+
+  it("monta o produto aninhado e os dados de estoque na criação", () => {
+    expect(insumoParaApi(form)).toEqual({
+      produto: {
+        nome_produto: "Ureia 45%",
+        id_categoria_insumo: 2,
+        subcategoria: "Ureia",
+        unidade_medida: "kg",
+        id_fabricante: 3,
+        id_marca: 4,
+        id_fornecedor: 5,
+        registro_mapa: "MAPA-1",
+        ficha_tecnica: null,
+        observacoes: null,
+      },
+      estoque_atual: 100,
+      estoque_minimo: 20,
+      valor_unitario: 4.1,
+      id_propriedade: 4,
+      status: true,
+    });
+  });
+
+  it("não envia o saldo na edição", () => {
+    const p = insumoParaApi({ ...form, status: "Inativo" }, true);
+    expect(p).not.toHaveProperty("estoque_atual");
+    expect(p).toMatchObject({ estoque_minimo: 20, status: false });
+  });
+
+  it("envia nulo para limpar vínculos e campos opcionais não informados", () => {
+    const p = insumoParaApi(
+      { nome: "X", categoria: "Sementes", unidade_medida: "sc", estoque_atual: 0, estoque_minimo: 0, valor_unitario: 0, status: "Ativo" },
+      true
+    );
+    expect(p.produto).toMatchObject({
+      subcategoria: null,
+      id_fabricante: null,
+      id_marca: null,
+      id_fornecedor: null,
+    });
+    expect(p.id_propriedade).toBeNull();
   });
 });
 

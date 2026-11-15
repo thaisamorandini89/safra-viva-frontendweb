@@ -22,6 +22,8 @@ interface Props {
   movimentacoes: MovimentacaoEstoque[];
   onVoltar: () => void;
   onMovimentar: (insumo: Insumo, tipo: TipoMovimentacao) => void;
+  onEditar: (i: Insumo) => void;
+  onExcluir: (i: Insumo) => void;
 }
 
 export default function InsumoDetalhe({
@@ -29,6 +31,8 @@ export default function InsumoDetalhe({
   movimentacoes,
   onVoltar,
   onMovimentar,
+  onEditar,
+  onExcluir,
 }: Props) {
   const historico = useMemo(
     () =>
@@ -75,6 +79,12 @@ export default function InsumoDetalhe({
             vencido={isVencido(i)}
             proximoVencimento={isProximoVencimento(i)}
           />
+          <Button variant="ghost" onClick={() => onEditar(i)}>
+            ✏️ Editar
+          </Button>
+          <Button variant="ghost" onClick={() => onExcluir(i)}>
+            🗑️ Excluir
+          </Button>
           <Button variant="secondary" onClick={() => onMovimentar(i, "Entrada")}>
             ⬇️ Registrar Entrada
           </Button>

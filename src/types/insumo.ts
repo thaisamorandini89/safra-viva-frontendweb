@@ -170,12 +170,16 @@ export interface MovimentacaoEstoque {
 /** Entidade: Insumo */
 export interface Insumo {
   id: string;
+  id_produto?: number;
   nome: string;
   categoria: CategoriaInsumo;
   tipo?: string;
   unidade_medida: string;
+  id_fabricante?: number;
   fabricante?: string;
+  id_marca?: number;
   marca?: string;
+  id_fornecedor?: number;
   fornecedor?: string;
   estoque_atual: number;
   estoque_minimo: number;
@@ -193,10 +197,14 @@ export interface Insumo {
 export interface NovoInsumoPayload {
   nome: string;
   categoria: CategoriaInsumo;
+  id_categoria_insumo?: number;
   tipo?: string;
   unidade_medida: string;
+  id_fabricante?: number;
   fabricante?: string;
+  id_marca?: number;
   marca?: string;
+  id_fornecedor?: number;
   fornecedor?: string;
   estoque_atual: number;
   estoque_minimo: number;
