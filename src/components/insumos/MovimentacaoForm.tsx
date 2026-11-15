@@ -1,9 +1,13 @@
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getTalhoes, getAtividades } from "../../services/api";
+import {
+  getTalhoesCadastrados,
+  getAtividadesCadastradas,
+  getFuncionarios,
+  getFornecedores,
+} from "../../services/api";
 import { Talhao } from "../../types/talhao";
-import { FUNCIONARIOS_MOCK } from "../../services/atividadesMock";
-import { FORNECEDORES_MOCK } from "../../services/insumosMock";
+import { dataLocalISO } from "../../types/atividade";
 import {
   Insumo,
   NovaMovimentacaoPayload,
@@ -50,9 +54,9 @@ export default function MovimentacaoForm({
   const [valorUnitario, setValorUnitario] = useState(
     insumoInicial ? String(insumoInicial.valor_unitario) : ""
   );
-  const [data, setData] = useState(new Date().toISOString().slice(0, 10));
+  const [data, setData] = useState(dataLocalISO());
   const [idResponsavel, setIdResponsavel] = useState("");
-  const [fornecedor, setFornecedor] = useState(insumoInicial?.fornecedor ?? "");
+  const [idFornecedor, setIdFornecedor] = useState("");
   const [notaFiscal, setNotaFiscal] = useState("");
   const [numeroLote, setNumeroLote] = useState("");
   const [dataFabricacao, setDataFabricacao] = useState("");
@@ -65,13 +69,23 @@ export default function MovimentacaoForm({
   const [erros, setErros] = useState<Record<string, string>>({});
 
   const { data: talhoes = [] } = useQuery({
-    queryKey: ["talhoes"],
-    queryFn: getTalhoes,
+    queryKey: ["talhoes", "cadastrados"],
+    queryFn: getTalhoesCadastrados,
   });
 
   const { data: atividades = [] } = useQuery({
-    queryKey: ["atividades"],
-    queryFn: getAtividades,
+    queryKey: ["atividades", "cadastradas"],
+    queryFn: getAtividadesCadastradas,
+  });
+
+  const { data: funcionarios = [] } = useQuery({
+    queryKey: ["funcionarios"],
+    queryFn: getFuncionarios,
+  });
+
+  const { data: fornecedores = [] } = useQuery({
+    queryKey: ["fornecedores"],
+    queryFn: getFornecedores,
   });
 
   const insumo = useMemo(
@@ -148,7 +162,8 @@ export default function MovimentacaoForm({
   const handleSalvar = () => {
     if (!validar()) return;
 
-    const funcionario = FUNCIONARIOS_MOCK.find((f) => f.id === Number(idResponsavel));
+    const funcionario = funcionarios.find((f) => f.id_funcionario === idResponsavel);
+    const fornecedor = fornecedores.find((f) => String(f.id_fornecedor) === idFornecedor);
     const talhao = opcoesTalhao.find((t) => t.id === idTalhao);
     const atividade = atividades.find((a) => a.id === idAtividade);
 
@@ -159,11 +174,12 @@ export default function MovimentacaoForm({
       quantidade: num(quantidade),
       valor_unitario: num(valorUnitario) || insumo?.valor_unitario,
       data_movimentacao: data,
-      id_responsavel: Number(idResponsavel),
-      responsavel: funcionario?.nome,
+      id_responsavel: idResponsavel,
+      responsavel: funcionario?.nome_completo,
       ...(tipo === "Entrada"
         ? {
-            fornecedor: fornecedor.trim() || undefined,
+            id_fornecedor: fornecedor?.id_fornecedor,
+            fornecedor: fornecedor?.nome_fantasia || fornecedor?.nome_fornecedor,
             nota_fiscal: notaFiscal.trim() || undefined,
             numero_lote: numeroLote.trim() || undefined,
             data_fabricacao: dataFabricacao || null,
@@ -259,11 +275,14 @@ export default function MovimentacaoForm({
             }
             placeholder="Selecione o responsável"
           >
-            {FUNCIONARIOS_MOCK.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.nome} — {f.cargo}
-              </option>
-            ))}
+            {funcionarios
+              .filter((f) => f.status !== false)
+              .map((f) => (
+                <option key={f.id_funcionario} value={f.id_funcionario}>
+                  {f.nome_completo}
+                  {f.cargo ? ` — ${f.cargo}` : ""}
+                </option>
+              ))}
           </Select>
           <Erro campo="responsavel" />
         </Field>
@@ -273,17 +292,21 @@ export default function MovimentacaoForm({
       {tipo === "Entrada" && (
         <FormSection title="Dados da Entrada" cols={3}>
           <Field label="Fornecedor">
-            <Input
-              list="fornecedores-movimentacao"
-              value={fornecedor}
-              onChange={(e) => setFornecedor(e.target.value)}
-              placeholder="Ex.: Agro Insumos Ltda."
-            />
-            <datalist id="fornecedores-movimentacao">
-              {FORNECEDORES_MOCK.map((f) => (
-                <option key={f} value={f} />
-              ))}
-            </datalist>
+            <Select
+              value={idFornecedor}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                setIdFornecedor(e.target.value)
+              }
+              placeholder="Selecione o fornecedor"
+            >
+              {fornecedores
+                .filter((f) => f.status !== false)
+                .map((f) => (
+                  <option key={f.id_fornecedor} value={f.id_fornecedor}>
+                    {f.nome_fantasia || f.nome_fornecedor}
+                  </option>
+                ))}
+            </Select>
           </Field>
 
           <Field label="Número da Nota Fiscal">
