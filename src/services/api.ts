@@ -13,12 +13,14 @@ import {
   MovimentacaoEstoque,
   NovoInsumoPayload,
   NovaMovimentacaoPayload,
+  ProdutoCadastrado,
 } from '../types/insumo';
 import { TALHOES_MOCK } from './talhoesMock';
 import { ATIVIDADES_MOCK } from './atividadesMock';
 import { INSUMOS_MOCK_ESTOQUE, MOVIMENTACOES_MOCK } from './insumosMock';
 import {
   insumoDaApi,
+  produtoDaApi,
   insumoParaApi,
   movimentacaoDaApi,
   movimentacaoParaApi,
@@ -299,8 +301,14 @@ export interface FornecedorAPI {
   id_fornecedor: number;
   nome_fornecedor: string;
   nome_fantasia?: string | null;
+  cnpj?: string | null;
+  telefone?: string | null;
+  email?: string | null;
+  observacoes?: string | null;
   status?: boolean;
 }
+
+export type FornecedorPayload = Partial<Omit<FornecedorAPI, 'id_fornecedor'>>;
 
 export interface AtividadeIndicadores {
   total: number;
@@ -521,8 +529,15 @@ export interface CategoriaInsumoAPI {
 export interface FabricanteAPI {
   id_fabricante: number;
   nome_fabricante: string;
+  cnpj?: string | null;
+  telefone?: string | null;
+  email?: string | null;
+  website?: string | null;
+  observacoes?: string | null;
   status?: boolean;
 }
+
+export type FabricantePayload = Partial<Omit<FabricanteAPI, 'id_fabricante'>>;
 
 export interface MarcaAPI {
   id_marca: number;
@@ -557,6 +572,53 @@ export async function getMarcas(): Promise<MarcaAPI[]> {
     console.warn('[marcas] endpoint indisponível.');
     return [];
   }
+}
+
+/** Produtos do cadastro, para o insumo usar um produto existente */
+export async function getProdutos(): Promise<ProdutoCadastrado[]> {
+  try {
+    const { data } = await api.get<unknown[]>('/api/produtos');
+    return Array.isArray(data) ? data.map(produtoDaApi) : [];
+  } catch {
+    console.warn('[produtos] endpoint indisponível.');
+    return [];
+  }
+}
+
+export function criarFornecedor(dados: FornecedorPayload): Promise<unknown> {
+  return escreverSemDemonstracao(() => api.post('/api/fornecedores', dados));
+}
+
+export function atualizarFornecedor(id: number, dados: FornecedorPayload): Promise<unknown> {
+  return escreverSemDemonstracao(() => api.put(`/api/fornecedores/${id}`, dados));
+}
+
+export async function excluirFornecedor(id: number): Promise<void> {
+  await escreverSemDemonstracao(() => api.delete(`/api/fornecedores/${id}`));
+}
+
+export function criarFabricante(dados: FabricantePayload): Promise<unknown> {
+  return escreverSemDemonstracao(() => api.post('/api/fabricantes', dados));
+}
+
+export function atualizarFabricante(id: number, dados: FabricantePayload): Promise<unknown> {
+  return escreverSemDemonstracao(() => api.put(`/api/fabricantes/${id}`, dados));
+}
+
+export async function excluirFabricante(id: number): Promise<void> {
+  await escreverSemDemonstracao(() => api.delete(`/api/fabricantes/${id}`));
+}
+
+export function criarMarca(descricao_marca: string): Promise<unknown> {
+  return escreverSemDemonstracao(() => api.post('/api/marcas', { descricao_marca }));
+}
+
+export function atualizarMarca(id: number, descricao_marca: string): Promise<unknown> {
+  return escreverSemDemonstracao(() => api.put(`/api/marcas/${id}`, { descricao_marca }));
+}
+
+export async function excluirMarca(id: number): Promise<void> {
+  await escreverSemDemonstracao(() => api.delete(`/api/marcas/${id}`));
 }
 
 /** Insumos cadastrados, sem dados de demonstração; propaga a falha da API */
@@ -709,7 +771,7 @@ async function realOuDemonstracao<T>(
 }
 
 /** Escrita sem modo de demonstração: propaga a recusa do backend com a mensagem dele */
-async function escreverNoFinanceiro<T>(chamada: () => Promise<{ data: T }>): Promise<T> {
+async function escreverSemDemonstracao<T>(chamada: () => Promise<{ data: T }>): Promise<T> {
   try {
     return (await chamada()).data;
   } catch (e) {
@@ -775,7 +837,7 @@ export async function excluirLancamento(id: string): Promise<void> {
 
 /** Marca ou desmarca a conciliação; o backend só concilia lançamento pago */
 export function conciliarLancamento(id: string, conciliado: boolean): Promise<Lancamento> {
-  return escreverNoFinanceiro(() =>
+  return escreverSemDemonstracao(() =>
     api.put<Lancamento>(`/api/lancamentos/${id}/conciliacao`, { conciliado })
   );
 }
@@ -792,18 +854,18 @@ export function getCentrosCusto(): Promise<CentroCusto[]> {
 }
 
 export function criarCentroCusto(dados: CentroCustoPayload): Promise<CentroCusto> {
-  return escreverNoFinanceiro(() => api.post<CentroCusto>('/api/centros-custo', dados));
+  return escreverSemDemonstracao(() => api.post<CentroCusto>('/api/centros-custo', dados));
 }
 
 export function atualizarCentroCusto(
   id: number,
   dados: Partial<CentroCustoPayload>
 ): Promise<CentroCusto> {
-  return escreverNoFinanceiro(() => api.put<CentroCusto>(`/api/centros-custo/${id}`, dados));
+  return escreverSemDemonstracao(() => api.put<CentroCusto>(`/api/centros-custo/${id}`, dados));
 }
 
 export async function excluirCentroCusto(id: number): Promise<void> {
-  await escreverNoFinanceiro(() => api.delete(`/api/centros-custo/${id}`));
+  await escreverSemDemonstracao(() => api.delete(`/api/centros-custo/${id}`));
 }
 
 export function getSafras(idPropriedade?: number): Promise<Safra[]> {
@@ -823,16 +885,16 @@ export function getSafras(idPropriedade?: number): Promise<Safra[]> {
 }
 
 export function criarSafra(dados: SafraPayload): Promise<Safra> {
-  return escreverNoFinanceiro(() => api.post<Safra>('/api/safras', dados));
+  return escreverSemDemonstracao(() => api.post<Safra>('/api/safras', dados));
 }
 
 /** A propriedade da safra não muda na edição (o backend recusa a troca) */
 export function atualizarSafra(id: number, dados: Partial<SafraPayload>): Promise<Safra> {
-  return escreverNoFinanceiro(() => api.put<Safra>(`/api/safras/${id}`, dados));
+  return escreverSemDemonstracao(() => api.put<Safra>(`/api/safras/${id}`, dados));
 }
 
 export async function excluirSafra(id: number): Promise<void> {
-  await escreverNoFinanceiro(() => api.delete(`/api/safras/${id}`));
+  await escreverSemDemonstracao(() => api.delete(`/api/safras/${id}`));
 }
 
 export function getFinanceiroSaldo(

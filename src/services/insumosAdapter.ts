@@ -6,6 +6,7 @@ import {
   MovimentacaoEstoque,
   NovaMovimentacaoPayload,
   NovoInsumoPayload,
+  ProdutoCadastrado,
   categoriaDoProduto,
 } from "../types/insumo";
 
@@ -58,20 +59,45 @@ export function insumoDaApi(raw: any): Insumo {
   };
 }
 
+export function produtoDaApi(raw: any): ProdutoCadastrado {
+  const nome = raw?.nome_produto ?? "";
+  return {
+    id_produto: Number(raw?.id_produto),
+    nome,
+    categoria: categoriaConhecida(raw?.categoria_nome, nome),
+    tipo: texto(raw?.subcategoria),
+    unidade_medida: raw?.unidade_medida ?? "",
+    id_fabricante: numero(raw?.id_fabricante),
+    id_marca: numero(raw?.id_marca),
+    id_fornecedor: numero(raw?.id_fornecedor),
+    registro_mapa: texto(raw?.registro_mapa),
+    ficha_tecnica: texto(raw?.ficha_tecnica),
+    observacoes: texto(raw?.observacoes),
+    ativo: raw?.status !== false,
+  };
+}
+
 export function insumoParaApi(dados: NovoInsumoPayload, edicao = false) {
+  // com produto já cadastrado, o insumo só referencia o produto
+  const produto =
+    !edicao && dados.id_produto != null
+      ? { id_produto: dados.id_produto }
+      : {
+          produto: {
+            nome_produto: dados.nome,
+            id_categoria_insumo: dados.id_categoria_insumo,
+            subcategoria: dados.tipo ?? null,
+            unidade_medida: dados.unidade_medida,
+            id_fabricante: dados.id_fabricante ?? null,
+            id_marca: dados.id_marca ?? null,
+            id_fornecedor: dados.id_fornecedor ?? null,
+            registro_mapa: dados.registro_mapa ?? null,
+            ficha_tecnica: dados.ficha_tecnica ?? null,
+            observacoes: dados.observacoes ?? null,
+          },
+        };
   const comuns = {
-    produto: {
-      nome_produto: dados.nome,
-      id_categoria_insumo: dados.id_categoria_insumo,
-      subcategoria: dados.tipo ?? null,
-      unidade_medida: dados.unidade_medida,
-      id_fabricante: dados.id_fabricante ?? null,
-      id_marca: dados.id_marca ?? null,
-      id_fornecedor: dados.id_fornecedor ?? null,
-      registro_mapa: dados.registro_mapa ?? null,
-      ficha_tecnica: dados.ficha_tecnica ?? null,
-      observacoes: dados.observacoes ?? null,
-    },
+    ...produto,
     estoque_minimo: dados.estoque_minimo,
     valor_unitario: dados.valor_unitario,
     id_propriedade: dados.id_propriedade ?? null,

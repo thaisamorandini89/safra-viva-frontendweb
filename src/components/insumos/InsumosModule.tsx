@@ -28,8 +28,9 @@ import InsumoDetalhe from "./InsumoDetalhe";
 import MovimentacaoForm from "./MovimentacaoForm";
 import MovimentacoesLista from "./MovimentacoesLista";
 import InsumosRelatorios from "./InsumosRelatorios";
+import CadastrosApoioAba from "./CadastrosApoioAba";
 
-type Aba = "dashboard" | "lista" | "movimentacoes" | "relatorios" | "novo";
+type Aba = "dashboard" | "lista" | "movimentacoes" | "relatorios" | "novo" | "cadastros";
 
 const ABAS: { id: Aba; icone: string; label: string }[] = [
   { id: "dashboard", icone: "📊", label: "Dashboard" },
@@ -37,6 +38,7 @@ const ABAS: { id: Aba; icone: string; label: string }[] = [
   { id: "movimentacoes", icone: "🔄", label: "Movimentações" },
   { id: "relatorios", icone: "📄", label: "Relatórios" },
   { id: "novo", icone: "➕", label: "Novo Insumo" },
+  { id: "cadastros", icone: "🏷️", label: "Cadastros" },
 ];
 
 /** Aplica a movimentação ao saldo do insumo dentro do cache local */
@@ -119,6 +121,8 @@ export default function InsumosModule() {
         novo,
       ]);
       queryClient.invalidateQueries({ queryKey: ["insumos", "cadastrados"] });
+      // o produto escolhido deixa de estar livre para outro insumo
+      queryClient.invalidateQueries({ queryKey: ["produtos"] });
       // o estoque inicial entra como movimentação
       queryClient.invalidateQueries({ queryKey: ["movimentacoes-estoque"] });
       alert(`✅ Insumo "${novo.nome}" cadastrado com sucesso!`);
@@ -276,6 +280,11 @@ export default function InsumosModule() {
         titulo: "Relatórios de Insumos",
         descricao: "Estoque atual, consumo por talhão e safra e produtos vencidos",
       }
+    : aba === "cadastros"
+    ? {
+        titulo: "Cadastros de Apoio",
+        descricao: "Fornecedores, fabricantes e marcas usados nos produtos e nas entradas",
+      }
     : editando
     ? {
         titulo: "Editar Insumo",
@@ -399,6 +408,8 @@ export default function InsumosModule() {
                 />
               ) : aba === "relatorios" ? (
                 <InsumosRelatorios insumos={insumos} movimentacoes={movimentacoes} />
+              ) : aba === "cadastros" ? (
+                <CadastrosApoioAba />
               ) : (
                 <InsumoForm
                   key={editando?.id ?? "novo"}
