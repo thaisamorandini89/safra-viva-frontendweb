@@ -5,6 +5,7 @@ import {
   MovimentacaoEstoque,
   lotesDaMovimentacao,
   lotesVencidos,
+  origemDaEntrada,
   saldoUtilizavel,
 } from "./insumo";
 
@@ -78,5 +79,31 @@ describe("lotesDaMovimentacao", () => {
   it("usa o número de lote da entrada quando não há lista de lotes", () => {
     expect(lotesDaMovimentacao(mov({ tipo: "Entrada", numero_lote: "L-9" }))).toBe("L-9");
     expect(lotesDaMovimentacao(mov({}))).toBe("");
+  });
+});
+
+describe("origemDaEntrada", () => {
+  const entrada = (extra: Partial<MovimentacaoEstoque>): MovimentacaoEstoque => ({
+    id: "m",
+    id_insumo: "1",
+    tipo: "Entrada",
+    quantidade: 5,
+    data_movimentacao: "2026-11-15",
+    id_responsavel: "",
+    ...extra,
+  });
+
+  it("rotula a entrada do cadastro como estoque inicial, com o fornecedor quando houver", () => {
+    expect(origemDaEntrada(entrada({ origem: "Cadastro" }))).toBe("Estoque inicial");
+    expect(origemDaEntrada(entrada({ origem: "Cadastro", fornecedor: "Agro Ltda." }))).toBe(
+      "Estoque inicial · Agro Ltda."
+    );
+  });
+
+  it("mostra o fornecedor nas demais entradas", () => {
+    expect(origemDaEntrada(entrada({ origem: "Manual", fornecedor: "Agro Ltda." }))).toBe(
+      "Agro Ltda."
+    );
+    expect(origemDaEntrada(entrada({}))).toBe("—");
   });
 });

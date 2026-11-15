@@ -10,6 +10,7 @@ import {
   fmtQtd,
   fmtData,
   lotesDaMovimentacao,
+  origemDaEntrada,
 } from "../../types/insumo";
 import Button from "../ui/Button";
 
@@ -296,7 +297,7 @@ export default function MovimentacoesLista({
                     <td className="px-4 py-3 text-gray-600">
                       {entrada ? (
                         <>
-                          <div>{m.fornecedor ?? "—"}</div>
+                          <div>{origemDaEntrada(m)}</div>
                           {m.nota_fiscal && (
                             <div className="text-xs text-gray-400">{m.nota_fiscal}</div>
                           )}

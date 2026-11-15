@@ -158,6 +158,40 @@ describe("insumoParaApi", () => {
     });
   });
 
+  it("envia os dados da entrada do estoque inicial na criação", () => {
+    const p = insumoParaApi({
+      ...form,
+      entrada_inicial: {
+        id_responsavel: "uuid-1",
+        numero_lote: "L-1",
+        data_fabricacao: null,
+        data_validade: "2027-01-01",
+      },
+    });
+
+    expect(p).toMatchObject({
+      estoque_atual: 100,
+      entrada_inicial: {
+        id_funcionario: "uuid-1",
+        numero_lote: "L-1",
+        data_fabricacao: undefined,
+        data_validade: "2027-01-01",
+      },
+    });
+  });
+
+  it("não envia a entrada inicial sem estoque inicial nem na edição", () => {
+    const entrada_inicial = { id_responsavel: "uuid-1", numero_lote: "L-1" };
+
+    expect(insumoParaApi({ ...form, estoque_atual: 0, entrada_inicial })).not.toHaveProperty(
+      "entrada_inicial"
+    );
+    expect(insumoParaApi({ ...form, entrada_inicial }, true)).not.toHaveProperty(
+      "entrada_inicial"
+    );
+    expect(insumoParaApi(form)).not.toHaveProperty("entrada_inicial");
+  });
+
   it("não envia o saldo na edição", () => {
     const p = insumoParaApi({ ...form, status: "Inativo" }, true);
     expect(p).not.toHaveProperty("estoque_atual");
@@ -265,6 +299,15 @@ describe("movimentacaoDaApi", () => {
       { id_lote: "2", numero_lote: "L-2", data_validade: null, quantidade: 4 },
     ]);
     expect(movimentacaoDaApi({ id_movimentacao: "jkl" }).lotes).toEqual([]);
+  });
+
+  it("identifica a entrada do estoque inicial do cadastro", () => {
+    const m = movimentacaoDaApi({
+      id_movimentacao: "pqr",
+      tipo_movimentacao: "ENTRADA",
+      origem: "CADASTRO",
+    });
+    expect(m).toMatchObject({ tipo: "Entrada", origem: "Cadastro" });
   });
 
   it("identifica a saída gerada pela conclusão de uma atividade", () => {
