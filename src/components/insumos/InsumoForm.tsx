@@ -7,6 +7,7 @@ import {
   getMarcas,
   getFornecedores,
   getFuncionarios,
+  getProdutos,
 } from "../../services/api";
 import {
   Insumo,
@@ -18,6 +19,7 @@ import {
   UNIDADES_MEDIDA,
   STATUS_INSUMO,
   StatusInsumo,
+  ProdutoCadastrado,
   fmtMoeda,
 } from "../../types/insumo";
 
@@ -67,6 +69,10 @@ export default function InsumoForm({
   const [fichaTecnica, setFichaTecnica] = useState("");
   const [observacoes, setObservacoes] = useState("");
   const [erros, setErros] = useState<Record<string, string>>({});
+  // só no cadastro: o insumo pode usar um produto já cadastrado, com os dados dele travados
+  const [origemProduto, setOrigemProduto] = useState<"novo" | "existente">("novo");
+  const [idProduto, setIdProduto] = useState("");
+  const travado = !modoEdicao && origemProduto === "existente";
 
   const { data: propriedadesApi = [] } = useQuery<any[]>({
     queryKey: ["propriedades"],
@@ -92,6 +98,32 @@ export default function InsumoForm({
     queryKey: ["fornecedores"],
     queryFn: getFornecedores,
   });
+
+  const { data: produtos = [] } = useQuery({
+    queryKey: ["produtos"],
+    queryFn: getProdutos,
+    enabled: !modoEdicao,
+  });
+
+  // um produto só pode ter um insumo
+  const produtosLivres = produtos.filter(
+    (p) => p.ativo && !insumos.some((i) => i.id_produto === p.id_produto)
+  );
+
+  const preencherProduto = (p?: ProdutoCadastrado) => {
+    const idTexto = (id?: number) => (id != null ? String(id) : "");
+    setIdProduto(p ? String(p.id_produto) : "");
+    setNome(p?.nome ?? "");
+    setCategoria(p?.categoria ?? "");
+    setTipo(p?.tipo ?? "");
+    setUnidade(p?.unidade_medida ?? "");
+    setIdFabricante(idTexto(p?.id_fabricante));
+    setIdMarca(idTexto(p?.id_marca));
+    setIdFornecedor(idTexto(p?.id_fornecedor));
+    setRegistroMapa(p?.registro_mapa ?? "");
+    setFichaTecnica(p?.ficha_tecnica ?? "");
+    setObservacoes(p?.observacoes ?? "");
+  };
 
   const { data: funcionarios = [] } = useQuery({
     queryKey: ["funcionarios"],
@@ -162,6 +194,11 @@ export default function InsumoForm({
   const validar = () => {
     const e: Record<string, string> = {};
 
+    // sem o produto escolhido, os demais campos dele ainda estão vazios
+    if (travado && !idProduto) {
+      setErros({ produto: "Selecione o produto." });
+      return false;
+    }
     if (!nome.trim()) e.nome = "Informe o nome do produto.";
     if (!categoria) e.categoria = "Selecione a categoria do insumo.";
     else if (categoriasApi.length && idCategoria == null)
@@ -177,6 +214,7 @@ export default function InsumoForm({
         e.dataValidade = "A validade não pode ser anterior à fabricação.";
     }
     if (
+      !travado &&
       insumos.some(
         (i) =>
           i.id !== insumoEdicao?.id &&
@@ -200,6 +238,7 @@ export default function InsumoForm({
     const fornecedor = fornecedores.find((f) => String(f.id_fornecedor) === idFornecedor);
 
     onSalvar({
+      id_produto: travado ? Number(idProduto) : undefined,
       nome: nome.trim(),
       categoria: categoria as CategoriaInsumo,
       id_categoria_insumo: idCategoria,
@@ -236,11 +275,67 @@ export default function InsumoForm({
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 lg:p-8">
+      {/* ------------------------------------------------------ Origem do produto */}
+      {!modoEdicao && (
+        <FormSection title="Produto" cols={3}>
+          <Field label="Origem do produto" required>
+            <div className="flex gap-4 py-2 text-sm text-gray-700">
+              {(
+                [
+                  ["novo", "Produto novo"],
+                  ["existente", "Produto existente"],
+                ] as const
+              ).map(([valor, rotulo]) => (
+                <label key={valor} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="origem-produto"
+                    className="accent-green-600"
+                    checked={origemProduto === valor}
+                    onChange={() => {
+                      setOrigemProduto(valor);
+                      preencherProduto(undefined);
+                      setErros({});
+                    }}
+                  />
+                  {rotulo}
+                </label>
+              ))}
+            </div>
+          </Field>
+
+          {origemProduto === "existente" && (
+            <Field label="Produto cadastrado" required className="lg:col-span-2">
+              <Select
+                value={idProduto}
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                  preencherProduto(produtosLivres.find((p) => String(p.id_produto) === e.target.value))
+                }
+                placeholder={
+                  produtosLivres.length ? "Selecione o produto" : "Nenhum produto sem insumo"
+                }
+              >
+                {produtosLivres.map((p) => (
+                  <option key={p.id_produto} value={p.id_produto}>
+                    {p.nome} ({p.unidade_medida})
+                  </option>
+                ))}
+              </Select>
+              <p className="text-[11px] text-gray-400 mt-1">
+                Os dados do produto vêm do cadastro e não podem ser alterados aqui.
+              </p>
+              <Erro campo="produto" />
+            </Field>
+          )}
+        </FormSection>
+      )}
+
       {/* -------------------------------------------------- Informações básicas */}
       <FormSection title="Informações Básicas" cols={3}>
         <Field label="Nome do Produto" required>
           <Input
             value={nome}
+            disabled={travado}
             onChange={(e) => setNome(e.target.value)}
             placeholder="Ex.: Ureia 45%"
           />
@@ -250,6 +345,7 @@ export default function InsumoForm({
         <Field label="Categoria" required>
           <Select
             value={categoria}
+            disabled={travado}
             onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
               setCategoria(e.target.value as CategoriaInsumo);
               setTipo("");
@@ -270,7 +366,7 @@ export default function InsumoForm({
             value={tipo}
             onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setTipo(e.target.value)}
             placeholder={categoria ? "Selecione o tipo" : "Selecione a categoria primeiro"}
-            disabled={!categoria}
+            disabled={!categoria || travado}
           >
             {tiposDisponiveis.map((t) => (
               <option key={t} value={t}>
@@ -283,6 +379,7 @@ export default function InsumoForm({
         <Field label="Fabricante">
           <Select
             value={idFabricante}
+            disabled={travado}
             onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
               setIdFabricante(e.target.value)
             }
@@ -299,6 +396,7 @@ export default function InsumoForm({
         <Field label="Marca">
           <Select
             value={idMarca}
+            disabled={travado}
             onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
               setIdMarca(e.target.value)
             }
@@ -315,6 +413,7 @@ export default function InsumoForm({
         <Field label="Unidade de Medida" required>
           <Select
             value={unidade}
+            disabled={travado}
             onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
               setUnidade(e.target.value)
             }
@@ -450,6 +549,7 @@ export default function InsumoForm({
         <Field label="Fornecedor">
           <Select
             value={idFornecedor}
+            disabled={travado}
             onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
               setIdFornecedor(e.target.value)
             }
@@ -484,6 +584,7 @@ export default function InsumoForm({
         <Field label="Registro MAPA">
           <Input
             value={registroMapa}
+            disabled={travado}
             onChange={(e) => setRegistroMapa(e.target.value)}
             placeholder="Ex.: MAPA 04519 (quando aplicável)"
           />
@@ -492,6 +593,7 @@ export default function InsumoForm({
         <Field label="Ficha Técnica">
           <Input
             value={fichaTecnica}
+            disabled={travado}
             onChange={(e) => setFichaTecnica(e.target.value)}
             placeholder="Classe toxicológica, composição, EPI exigido..."
           />
@@ -530,10 +632,11 @@ export default function InsumoForm({
       <SectionTitle>Observações</SectionTitle>
       <textarea
         value={observacoes}
+        disabled={travado}
         onChange={(e) => setObservacoes(e.target.value)}
         rows={3}
         placeholder="Condições de armazenamento, restrições de uso, recomendações técnicas..."
-        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition resize-none"
+        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition resize-none disabled:bg-gray-50 disabled:text-gray-500"
       />
 
       {/* --------------------------------------------------------------- Ações */}
