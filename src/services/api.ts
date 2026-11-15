@@ -33,7 +33,9 @@ import {
   Lancamento,
   NovoLancamentoPayload,
   CentroCusto,
+  CentroCustoPayload,
   Safra,
+  SafraPayload,
   SaldoFinanceiro,
   FluxoCaixaItem,
   IndicadorFinanceiro,
@@ -684,19 +686,51 @@ function paramsLancamento(filtros: FiltrosLancamento = {}) {
   return params;
 }
 
-export async function getLancamentos(
-  filtros: FiltrosLancamento = {}
-): Promise<Lancamento[]> {
+/**
+ * Regra única de demonstração do Financeiro: se o backend respondeu, vale a
+ * resposta, mesmo vazia; se recusou, o erro é propagado com a mensagem dele;
+ * só quando não há resposta (rede ou proxy) entram os dados de demonstração.
+ * `buscar` devolve null quando a resposta não tem o formato esperado.
+ */
+async function realOuDemonstracao<T>(
+  rotulo: string,
+  buscar: () => Promise<T | null>,
+  demonstracao: () => T
+): Promise<T> {
   try {
-    const { data } = await api.get<Lancamento[]>('/api/lancamentos', {
-      params: paramsLancamento(filtros),
-    });
-    if (Array.isArray(data)) return data;
-    return filtrarLancamentosMock(filtros);
-  } catch {
-    console.warn('[financeiro] lançamentos indisponíveis — usando dados de demonstração.');
-    return filtrarLancamentosMock(filtros);
+    const real = await buscar();
+    if (real != null) return real;
+  } catch (e) {
+    const erro = erroDoBackend(e);
+    if (erro) throw erro;
   }
+  console.warn(`[financeiro] ${rotulo}: backend sem resposta — usando dados de demonstração.`);
+  return demonstracao();
+}
+
+/** Escrita sem modo de demonstração: propaga a recusa do backend com a mensagem dele */
+async function escreverNoFinanceiro<T>(chamada: () => Promise<{ data: T }>): Promise<T> {
+  try {
+    return (await chamada()).data;
+  } catch (e) {
+    throw (
+      erroDoBackend(e) ??
+      new Error('Não foi possível falar com o servidor. Tente novamente.')
+    );
+  }
+}
+
+export function getLancamentos(filtros: FiltrosLancamento = {}): Promise<Lancamento[]> {
+  return realOuDemonstracao(
+    'lançamentos',
+    async () => {
+      const { data } = await api.get<Lancamento[]>('/api/lancamentos', {
+        params: paramsLancamento(filtros),
+      });
+      return Array.isArray(data) ? data : null;
+    },
+    () => filtrarLancamentosMock(filtros)
+  );
 }
 
 export async function criarLancamento(
@@ -705,8 +739,10 @@ export async function criarLancamento(
   try {
     const { data } = await api.post<Lancamento>('/api/lancamentos', dados);
     return data;
-  } catch {
-    // Backend indisponível → grava no store mock da sessão
+  } catch (e) {
+    const erro = erroDoBackend(e);
+    if (erro) throw erro;
+    // Backend sem resposta → grava no store de demonstração da sessão
     return criarLancamentoMock(dados);
   }
 }
@@ -718,7 +754,9 @@ export async function atualizarLancamento(
   try {
     const { data } = await api.put<Lancamento>(`/api/lancamentos/${id}`, dados);
     return data;
-  } catch {
+  } catch (e) {
+    const erro = erroDoBackend(e);
+    if (erro) throw erro;
     return atualizarLancamentoMock(id, dados);
   }
 }
@@ -726,109 +764,132 @@ export async function atualizarLancamento(
 export async function excluirLancamento(id: string): Promise<void> {
   try {
     await api.delete(`/api/lancamentos/${id}`);
-  } catch (e: any) {
-    // Erro de regra do backend (ex.: lançamento conciliado) → propaga
-    if (e?.response) throw e;
-    // Backend indisponível → exclui do store mock (pode lançar se conciliado)
+  } catch (e) {
+    // Recusa do backend (ex.: lançamento conciliado) → propaga
+    const erro = erroDoBackend(e);
+    if (erro) throw erro;
+    // Backend sem resposta → exclui do store de demonstração
     excluirLancamentoMock(id);
   }
 }
 
-export async function getCentrosCusto(): Promise<CentroCusto[]> {
-  try {
-    const { data } = await api.get<CentroCusto[]>('/api/centros-custo');
-    if (Array.isArray(data) && data.length) return data;
-    return CENTROS_CUSTO_MOCK;
-  } catch {
-    console.warn('[financeiro] centros de custo indisponíveis — usando dados de demonstração.');
-    return CENTROS_CUSTO_MOCK;
-  }
+/** Marca ou desmarca a conciliação; o backend só concilia lançamento pago */
+export function conciliarLancamento(id: string, conciliado: boolean): Promise<Lancamento> {
+  return escreverNoFinanceiro(() =>
+    api.put<Lancamento>(`/api/lancamentos/${id}/conciliacao`, { conciliado })
+  );
 }
 
-export async function criarCentroCusto(
-  dados: Omit<CentroCusto, 'id_centro_custo'>
+export function getCentrosCusto(): Promise<CentroCusto[]> {
+  return realOuDemonstracao(
+    'centros de custo',
+    async () => {
+      const { data } = await api.get<CentroCusto[]>('/api/centros-custo');
+      return Array.isArray(data) ? data : null;
+    },
+    () => CENTROS_CUSTO_MOCK
+  );
+}
+
+export function criarCentroCusto(dados: CentroCustoPayload): Promise<CentroCusto> {
+  return escreverNoFinanceiro(() => api.post<CentroCusto>('/api/centros-custo', dados));
+}
+
+export function atualizarCentroCusto(
+  id: number,
+  dados: Partial<CentroCustoPayload>
 ): Promise<CentroCusto> {
-  try {
-    const { data } = await api.post<CentroCusto>('/api/centros-custo', dados);
-    return data;
-  } catch {
-    return { ...dados, id_centro_custo: Date.now() } as CentroCusto;
-  }
+  return escreverNoFinanceiro(() => api.put<CentroCusto>(`/api/centros-custo/${id}`, dados));
 }
 
-export async function getSafras(idPropriedade?: number): Promise<Safra[]> {
-  try {
-    const { data } = await api.get<Safra[]>('/api/safras', {
-      params: idPropriedade ? { id_propriedade: idPropriedade } : {},
-    });
-    if (Array.isArray(data) && data.length) return data;
-    return idPropriedade
-      ? SAFRAS_MOCK.filter((s) => s.id_propriedade === idPropriedade)
-      : SAFRAS_MOCK;
-  } catch {
-    console.warn('[financeiro] safras indisponíveis — usando dados de demonstração.');
-    return idPropriedade
-      ? SAFRAS_MOCK.filter((s) => s.id_propriedade === idPropriedade)
-      : SAFRAS_MOCK;
-  }
+export async function excluirCentroCusto(id: number): Promise<void> {
+  await escreverNoFinanceiro(() => api.delete(`/api/centros-custo/${id}`));
 }
 
-export async function getFinanceiroSaldo(
+export function getSafras(idPropriedade?: number): Promise<Safra[]> {
+  return realOuDemonstracao(
+    'safras',
+    async () => {
+      const { data } = await api.get<Safra[]>('/api/safras', {
+        params: idPropriedade ? { id_propriedade: idPropriedade } : {},
+      });
+      return Array.isArray(data) ? data : null;
+    },
+    () =>
+      idPropriedade
+        ? SAFRAS_MOCK.filter((s) => s.id_propriedade === idPropriedade)
+        : SAFRAS_MOCK
+  );
+}
+
+export function criarSafra(dados: SafraPayload): Promise<Safra> {
+  return escreverNoFinanceiro(() => api.post<Safra>('/api/safras', dados));
+}
+
+/** A propriedade da safra não muda na edição (o backend recusa a troca) */
+export function atualizarSafra(id: number, dados: Partial<SafraPayload>): Promise<Safra> {
+  return escreverNoFinanceiro(() => api.put<Safra>(`/api/safras/${id}`, dados));
+}
+
+export async function excluirSafra(id: number): Promise<void> {
+  await escreverNoFinanceiro(() => api.delete(`/api/safras/${id}`));
+}
+
+export function getFinanceiroSaldo(
   filtros: FiltrosLancamento = {}
 ): Promise<SaldoFinanceiro> {
-  try {
-    const { data } = await api.get<SaldoFinanceiro>('/api/financeiro/saldo', {
-      params: paramsLancamento(filtros),
-    });
-    if (data && typeof data.saldo === 'number') return data;
-    return saldoMock(filtros);
-  } catch {
-    console.warn('[financeiro] saldo indisponível — usando dados de demonstração.');
-    return saldoMock(filtros);
-  }
+  return realOuDemonstracao(
+    'saldo',
+    async () => {
+      const { data } = await api.get<SaldoFinanceiro>('/api/financeiro/saldo', {
+        params: paramsLancamento(filtros),
+      });
+      return data && typeof data.saldo === 'number' ? data : null;
+    },
+    () => saldoMock(filtros)
+  );
 }
 
-export async function getFluxoCaixa(
+export function getFluxoCaixa(
   dataInicio?: string,
   dataFim?: string
 ): Promise<FluxoCaixaItem[]> {
-  try {
-    const { data } = await api.get<FluxoCaixaItem[]>('/api/financeiro/fluxo-caixa', {
-      params: {
-        ...(dataInicio ? { data_inicio: dataInicio } : {}),
-        ...(dataFim ? { data_fim: dataFim } : {}),
-      },
-    });
-    if (Array.isArray(data)) return data;
-    return fluxoCaixaMock(dataInicio, dataFim);
-  } catch {
-    console.warn('[financeiro] fluxo de caixa indisponível — usando dados de demonstração.');
-    return fluxoCaixaMock(dataInicio, dataFim);
-  }
+  return realOuDemonstracao(
+    'fluxo de caixa',
+    async () => {
+      const { data } = await api.get<FluxoCaixaItem[]>('/api/financeiro/fluxo-caixa', {
+        params: {
+          ...(dataInicio ? { data_inicio: dataInicio } : {}),
+          ...(dataFim ? { data_fim: dataFim } : {}),
+        },
+      });
+      return Array.isArray(data) ? data : null;
+    },
+    () => fluxoCaixaMock(dataInicio, dataFim)
+  );
 }
 
-export async function getIndicadores(
-  agruparPor: AgruparPor
-): Promise<IndicadorFinanceiro[]> {
-  try {
-    const { data } = await api.get<IndicadorFinanceiro[]>('/api/financeiro/indicadores', {
-      params: { agrupar_por: agruparPor },
-    });
-    if (Array.isArray(data) && data.length) return data;
-    return indicadoresMock(agruparPor);
-  } catch {
-    console.warn('[financeiro] indicadores indisponíveis — usando dados de demonstração.');
-    return indicadoresMock(agruparPor);
-  }
+export function getIndicadores(agruparPor: AgruparPor): Promise<IndicadorFinanceiro[]> {
+  return realOuDemonstracao(
+    'indicadores',
+    async () => {
+      const { data } = await api.get<IndicadorFinanceiro[]>('/api/financeiro/indicadores', {
+        params: { agrupar_por: agruparPor },
+      });
+      return Array.isArray(data) ? data : null;
+    },
+    () => indicadoresMock(agruparPor)
+  );
 }
 
-/** Lista todos os lançamentos mock (usado por telas que agregam no cliente) */
-export async function getTodosLancamentos(): Promise<Lancamento[]> {
-  try {
-    const { data } = await api.get<Lancamento[]>('/api/lancamentos');
-    if (Array.isArray(data) && data.length) return data;
-    return LANCAMENTOS_MOCK;
-  } catch {
-    return LANCAMENTOS_MOCK;
-  }
+/** Lista todos os lançamentos (usado por telas que agregam no cliente) */
+export function getTodosLancamentos(): Promise<Lancamento[]> {
+  return realOuDemonstracao(
+    'lançamentos',
+    async () => {
+      const { data } = await api.get<Lancamento[]>('/api/lancamentos');
+      return Array.isArray(data) ? data : null;
+    },
+    () => LANCAMENTOS_MOCK
+  );
 }
