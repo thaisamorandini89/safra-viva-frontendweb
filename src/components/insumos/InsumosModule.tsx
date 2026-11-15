@@ -119,6 +119,8 @@ export default function InsumosModule() {
         novo,
       ]);
       queryClient.invalidateQueries({ queryKey: ["insumos", "cadastrados"] });
+      // o estoque inicial entra como movimentação
+      queryClient.invalidateQueries({ queryKey: ["movimentacoes-estoque"] });
       alert(`✅ Insumo "${novo.nome}" cadastrado com sucesso!`);
       setAba("lista");
     },
@@ -159,6 +161,8 @@ export default function InsumosModule() {
         antigos.filter((i) => i.id !== insumo.id)
       );
       queryClient.invalidateQueries({ queryKey: ["insumos", "cadastrados"] });
+      // a entrada do estoque inicial sai junto com o insumo
+      queryClient.invalidateQueries({ queryKey: ["movimentacoes-estoque"] });
       setExcluindo(null);
       setSelecionado(null);
       alert(`✅ Insumo "${insumo.nome}" excluído.`);

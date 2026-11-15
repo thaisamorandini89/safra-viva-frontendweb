@@ -15,6 +15,7 @@ import {
   fmtQtd,
   fmtData,
   lotesDaMovimentacao,
+  origemDaEntrada,
 } from "../../types/insumo";
 import Button from "../ui/Button";
 import InsumoStatusBadge from "./InsumoStatusBadge";
@@ -318,7 +319,7 @@ export default function InsumoDetalhe({
                     </td>
                     <td className="px-4 py-3 text-gray-600">
                       {entrada
-                        ? m.fornecedor ?? "—"
+                        ? origemDaEntrada(m)
                         : `${m.destino ?? m.atividade ?? "—"}${
                             m.codigo_talhao ? ` · ${m.codigo_talhao}` : ""
                           }`}
