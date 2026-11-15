@@ -5,6 +5,7 @@ import {
   criarLancamento,
   atualizarLancamento,
   excluirLancamento,
+  conciliarLancamento,
 } from "../../services/api";
 import { Lancamento, NovoLancamentoPayload } from "../../types/financeiro";
 import { colors } from "../../theme";
@@ -17,8 +18,17 @@ import LancamentosLista from "./LancamentosLista";
 import LancamentoForm from "./LancamentoForm";
 import FluxoCaixa from "./FluxoCaixa";
 import FinanceiroRelatorios from "./FinanceiroRelatorios";
+import SafrasAba from "./SafrasAba";
+import CentrosCustoAba from "./CentrosCustoAba";
 
-type Aba = "dashboard" | "lancamentos" | "fluxo" | "relatorios" | "novo";
+type Aba =
+  | "dashboard"
+  | "lancamentos"
+  | "fluxo"
+  | "relatorios"
+  | "novo"
+  | "safras"
+  | "centros";
 
 const ABAS: { id: Aba; icone: string; label: string }[] = [
   { id: "dashboard", icone: "📊", label: "Dashboard" },
@@ -26,6 +36,8 @@ const ABAS: { id: Aba; icone: string; label: string }[] = [
   { id: "fluxo", icone: "🏦", label: "Fluxo de Caixa" },
   { id: "relatorios", icone: "📄", label: "Relatórios" },
   { id: "novo", icone: "➕", label: "Novo Lançamento" },
+  { id: "safras", icone: "🌾", label: "Safras" },
+  { id: "centros", icone: "🏷️", label: "Centros de Custo" },
 ];
 
 export default function FinanceiroModule() {
@@ -95,6 +107,27 @@ export default function FinanceiroModule() {
     },
   });
 
+  const { mutate: conciliar } = useMutation({
+    mutationFn: ({ l, conciliado }: { l: Lancamento; conciliado: boolean }) =>
+      conciliarLancamento(l.id_lancamento, conciliado),
+    onSuccess: (_l, { conciliado }) => {
+      invalidarFinanceiro();
+      setToast({
+        tipo: "sucesso",
+        titulo: conciliado ? "Lançamento conciliado." : "Conciliação desfeita.",
+      });
+    },
+    onError: (erro: any, { conciliado }) => {
+      setToast({
+        tipo: "erro",
+        titulo: conciliado
+          ? "Não foi possível conciliar o lançamento."
+          : "Não foi possível desfazer a conciliação.",
+        descricao: erro?.message,
+      });
+    },
+  });
+
   const pedirExclusao = (l: Lancamento) => {
     if (l.conciliado) {
       setToast({
@@ -131,6 +164,16 @@ export default function FinanceiroModule() {
     ? {
         titulo: "Fluxo de Caixa",
         descricao: "Entradas, saídas e saldo acumulado por período",
+      }
+    : aba === "safras"
+    ? {
+        titulo: "Safras",
+        descricao: "Cadastre as safras usadas nos lançamentos e nos relatórios",
+      }
+    : aba === "centros"
+    ? {
+        titulo: "Centros de Custo",
+        descricao: "Classifique as despesas em operacionais e administrativas",
       }
     : {
         titulo: "Relatórios e Indicadores",
@@ -176,6 +219,10 @@ export default function FinanceiroModule() {
               }}
               onSalvar={salvar}
             />
+          ) : aba === "safras" ? (
+            <SafrasAba />
+          ) : aba === "centros" ? (
+            <CentrosCustoAba />
           ) : isLoading ? (
             <div className="flex flex-col items-center justify-center py-24 text-gray-400">
               <span className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin mb-3" />
@@ -194,6 +241,7 @@ export default function FinanceiroModule() {
               onNovo={() => setAba("novo")}
               onEditar={iniciarEdicao}
               onExcluir={pedirExclusao}
+              onConciliar={(l, conciliado) => conciliar({ l, conciliado })}
             />
           ) : aba === "fluxo" ? (
             <FluxoCaixa />

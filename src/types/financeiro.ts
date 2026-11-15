@@ -81,6 +81,25 @@ export interface Safra {
   status?: boolean;
 }
 
+/** Dados do cadastro de safra; na edição vão só os campos alterados */
+export interface SafraPayload {
+  nome: string;
+  cultura: string;
+  id_propriedade: number;
+  data_inicio: string;
+  data_fim?: string | null;
+  area_plantada?: number | null;
+  status?: boolean;
+}
+
+/** Dados do cadastro de centro de custo; na edição vão só os campos alterados */
+export interface CentroCustoPayload {
+  nome: string;
+  tipo: TipoCentroCusto;
+  descricao?: string | null;
+  status?: boolean;
+}
+
 export interface SaldoFinanceiro {
   receita_total: number;
   despesa_total: number;

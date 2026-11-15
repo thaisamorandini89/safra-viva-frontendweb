@@ -19,9 +19,10 @@ interface Props {
   onNovo: () => void;
   onEditar: (l: Lancamento) => void;
   onExcluir: (l: Lancamento) => void;
+  onConciliar: (l: Lancamento, conciliado: boolean) => void;
 }
 
-export default function LancamentosLista({ onNovo, onEditar, onExcluir }: Props) {
+export default function LancamentosLista({ onNovo, onEditar, onExcluir, onConciliar }: Props) {
   const [filtros, setFiltros] = useState<FiltrosLancamento>({});
 
   const { data: safras = [] } = useQuery<Safra[]>({
@@ -261,20 +262,40 @@ export default function LancamentosLista({ onNovo, onEditar, onExcluir }: Props)
                         {fmtMoeda(l.valor)}
                       </td>
                       <td className="px-4 py-3 text-right whitespace-nowrap">
-                        <button
-                          onClick={() => onEditar(l)}
-                          className="text-gray-400 hover:text-green-700 transition px-1.5"
-                          title="Editar"
-                        >
-                          ✏️
-                        </button>
-                        <button
-                          onClick={() => onExcluir(l)}
-                          className="text-gray-400 hover:text-red-600 transition px-1.5"
-                          title="Excluir"
-                        >
-                          🗑️
-                        </button>
+                        {l.conciliado ? (
+                          // Conciliado não é editado nem excluído: só desfaz a conciliação
+                          <button
+                            onClick={() => onConciliar(l, false)}
+                            className="text-xs font-semibold text-sky-700 hover:text-sky-900 transition px-1.5"
+                            title="Desfazer conciliação"
+                          >
+                            ↩️ Desfazer conciliação
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => onConciliar(l, true)}
+                              className="text-gray-400 hover:text-sky-700 transition px-1.5"
+                              title="Conciliar"
+                            >
+                              ✅
+                            </button>
+                            <button
+                              onClick={() => onEditar(l)}
+                              className="text-gray-400 hover:text-green-700 transition px-1.5"
+                              title="Editar"
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              onClick={() => onExcluir(l)}
+                              className="text-gray-400 hover:text-red-600 transition px-1.5"
+                              title="Excluir"
+                            >
+                              🗑️
+                            </button>
+                          </>
+                        )}
                       </td>
                     </tr>
                   );
