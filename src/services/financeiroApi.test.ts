@@ -7,7 +7,7 @@ const http = vi.hoisted(() => ({
   put: vi.fn(),
   delete: vi.fn(),
 }));
-vi.mock("axios", () => ({ default: { create: () => http } }));
+vi.mock("axios", () => ({ default: { create: () => ({ ...http, interceptors: { request: { use: () => {} } } }) } }));
 
 import {
   getLancamentos,

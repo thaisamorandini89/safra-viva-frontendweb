@@ -49,6 +49,14 @@ export default function SafraIAMensagem({ mensagem }: Props) {
           ) : (
             <p className="whitespace-pre-wrap leading-relaxed">{mensagem.texto}</p>
           )}
+          {r?.origem === "demonstracao" && !mensagem.carregando && (
+            <span
+              title="Backend indisponível ou sem login no servidor: resposta gerada localmente com dados de exemplo."
+              className="mt-1.5 inline-block rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+            >
+              Modo demonstração
+            </span>
+          )}
         </div>
 
         {/* Destaques / insights */}
