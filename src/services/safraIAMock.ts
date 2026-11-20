@@ -1,10 +1,8 @@
 // ---------------------------------------------------------------------------
 // Módulo SafraIA — motor de interpretação de consultas (mock do backend LLM)
 // ---------------------------------------------------------------------------
-// Simula um agente de IA: classifica a intenção da pergunta em linguagem
-// natural (por correspondência de palavras-chave), consulta o contexto da
-// fazenda já carregado no frontend e devolve uma resposta estruturada com
-// insights, alertas e dados consolidados — adaptada à persona do usuário.
+// Simula um agente de IA e limita o contexto demonstrativo aos módulos do papel
+// autenticado.
 //
 // Quando o endpoint /api/safra-ia/consultar estiver disponível, este módulo
 // serve de fallback (mesmo padrão dos demais serviços do projeto).
@@ -15,8 +13,10 @@ import {
   SafraIAConsultaPayload,
   SafraIAContexto,
   SafraIADestaque,
-  SafraIAPersona,
-  SafraIAPersonaId,
+  SafraIAModulo,
+  SafraIAPapel,
+  SafraIAPapelId,
+  SafraIAPerfil,
   SafraIAResposta,
   SafraIATabela,
 } from "../types/safraIA";
@@ -33,87 +33,117 @@ import { areaDisponivel, produtividadeMedia } from "../types/talhao";
 import { custoTotal, isAtrasada } from "../types/atividade";
 
 // ---------------------------------------------------------------------------
-// Personas (níveis de acesso)
+// Papéis e módulos seguem os perfis padrão de Configurações.
 // ---------------------------------------------------------------------------
-export const PERSONAS: Record<SafraIAPersonaId, SafraIAPersona> = {
-  produtor: {
-    id: "produtor",
-    nome: "Produtor Rural",
-    icone: "👨‍🌾",
-    foco: "Visão geral e tomada de decisão rápida",
-    saudacao:
-      "Olá! Sou o assistente SafraIA. Posso te dar uma visão geral da fazenda, alertas de estoque e resultados por safra. Como posso ajudar?",
-    sugestoes: [
-      "Como está minha fazenda hoje?",
-      "Quais talhões estão disponíveis para plantio?",
-      "Tenho produtos vencidos no estoque?",
-      "Qual a lucratividade por safra?",
-    ],
-    verFinanceiro: true,
+export const PAPEIS_DEMO: Record<SafraIAPapelId, SafraIAPapel> = {
+  administrador: {
+    papel: "administrador",
+    nome_papel: "Administrador",
+    foco: "Visão ampla da fazenda, operações e resultados",
+    saudacao: "Olá! Sou o SafraIA. Posso ajudar a analisar propriedades, operação, estoque e resultados da fazenda.",
+    sugestoes: ["Quantas propriedades temos?", "Como está o fluxo financeiro?", "Quais atividades estão atrasadas?", "Como está o estoque?"],
+    modulos: ["Propriedades", "Talhões", "Funcionários", "Atividades", "Financeiro", "Insumos"],
+    consultas: [],
+  },
+  proprietario: {
+    papel: "proprietario",
+    nome_papel: "Proprietário",
+    foco: "Visão gerencial da fazenda e seus resultados",
+    saudacao: "Olá! Posso ajudar com a visão geral, os custos e os resultados da sua fazenda.",
+    sugestoes: ["Quantas propriedades temos?", "Qual a lucratividade por safra?", "Qual o custo por hectare?", "Como está a equipe?"],
+    modulos: ["Propriedades", "Talhões", "Funcionários", "Atividades", "Financeiro", "Insumos"],
+    consultas: [],
+  },
+  "gerente-agricola": {
+    papel: "gerente-agricola",
+    nome_papel: "Gerente Agrícola",
+    foco: "Gestão das operações e desempenho financeiro",
+    saudacao: "Olá! Posso ajudar a acompanhar a operação, a equipe e os resultados financeiros da fazenda.",
+    sugestoes: ["Quais atividades estão atrasadas?", "Qual o custo por hectare?", "Como está o estoque?", "Como está o fluxo financeiro?"],
+    modulos: ["Propriedades", "Talhões", "Funcionários", "Atividades", "Financeiro", "Insumos"],
+    consultas: [],
   },
   agronomo: {
-    id: "agronomo",
-    nome: "Agrônomo",
-    icone: "🌱",
-    foco: "Recomendações técnicas, culturas e manejo",
-    saudacao:
-      "Olá! Sou o SafraIA. Posso ajudar com produtividade dos talhões, áreas disponíveis, manejo de insumos e alertas de vencimento. O que deseja analisar?",
-    sugestoes: [
-      "Quais os talhões mais produtivos?",
-      "Quais áreas estão disponíveis para plantio?",
-      "Há produtos próximos do vencimento?",
-      "Qual o custo com fertilizantes por mês?",
-    ],
-    verFinanceiro: false,
+    papel: "agronomo",
+    nome_papel: "Agrônomo",
+    foco: "Áreas técnicas, atividades e manejo de insumos",
+    saudacao: "Olá! Posso ajudar com talhões, atividades agrícolas e manejo de insumos.",
+    sugestoes: ["Quais os talhões mais produtivos?", "Quais áreas estão disponíveis para plantio?", "Há produtos próximos do vencimento?", "Quais atividades estão atrasadas?"],
+    modulos: ["Propriedades", "Talhões", "Atividades", "Insumos"],
+    consultas: [],
   },
-  administrador: {
-    id: "administrador",
-    nome: "Administrador",
-    icone: "🛡️",
-    foco: "Análises financeiras, custos operacionais e lucratividade",
-    saudacao:
-      "Olá! Sou o SafraIA. Posso analisar custos por hectare, lucratividade por safra, gastos com insumos e indicadores de estoque. Por onde começamos?",
-    sugestoes: [
-      "Qual a lucratividade por safra?",
-      "Qual o custo por hectare?",
-      "Qual o custo com fertilizantes por mês?",
-      "Quais insumos estão abaixo do estoque mínimo?",
-    ],
-    verFinanceiro: true,
+  "supervisor-campo": {
+    papel: "supervisor-campo",
+    nome_papel: "Supervisor de Campo",
+    foco: "Atividades de campo, talhões e insumos",
+    saudacao: "Olá! Posso ajudar a acompanhar atividades, talhões e necessidades de insumos.",
+    sugestoes: ["Quais atividades estão atrasadas?", "Quais áreas estão disponíveis para plantio?", "Como está o estoque?", "Quais atividades estão em andamento?"],
+    modulos: ["Talhões", "Atividades", "Insumos"],
+    consultas: [],
   },
-  gerente: {
-    id: "gerente",
-    nome: "Gerente Operacional",
-    icone: "🧭",
-    foco: "Gargalos, atividades e eficiência das equipes",
-    saudacao:
-      "Olá! Sou o SafraIA. Posso mostrar o desempenho das equipes, atividades atrasadas e necessidades de reposição de estoque. O que precisa?",
-    sugestoes: [
-      "Como está o desempenho das equipes?",
-      "Quais atividades estão atrasadas?",
-      "Quais insumos precisam de reposição?",
-      "Quais talhões estão disponíveis para plantio?",
-    ],
-    verFinanceiro: false,
+  financeiro: {
+    papel: "financeiro",
+    nome_papel: "Financeiro",
+    foco: "Fluxo financeiro, custos e resultados",
+    saudacao: "Olá! Posso ajudar a analisar despesas, custos e resultados financeiros da fazenda.",
+    sugestoes: ["Como está o fluxo financeiro?", "Qual a lucratividade por safra?", "Qual o custo por hectare?", "Qual o custo com fertilizantes por mês?"],
+    modulos: ["Financeiro"],
+    consultas: [],
+  },
+  estoquista: {
+    papel: "estoquista",
+    nome_papel: "Estoquista",
+    foco: "Estoque, insumos e movimentações",
+    saudacao: "Olá! Posso ajudar a acompanhar o estoque, as movimentações e as atividades relacionadas.",
+    sugestoes: ["Quais insumos estão abaixo do estoque mínimo?", "Tenho produtos vencidos?", "Quais atividades estão atrasadas?", "Quais insumos precisam de reposição?"],
+    modulos: ["Atividades", "Insumos"],
+    consultas: [],
+  },
+  operador: {
+    papel: "operador",
+    nome_papel: "Operador",
+    foco: "Atividades agrícolas",
+    saudacao: "Olá! Posso ajudar a consultar informações sobre atividades agrícolas.",
+    sugestoes: ["Quais atividades estão atrasadas?", "Quais atividades estão em andamento?", "Como está a situação das atividades?"],
+    modulos: ["Atividades"],
+    consultas: [],
+  },
+  colaborador: {
+    papel: "colaborador",
+    nome_papel: "Colaborador",
+    foco: "Orientações gerais de gestão rural",
+    saudacao: "Olá! Posso ajudar com orientações gerais de gestão rural.",
+    sugestoes: ["Como organizar as atividades da fazenda?", "Como planejar o manejo da lavoura?"],
+    modulos: [],
+    consultas: [],
   },
 };
 
-/** Mapeia o perfil de acesso do usuário logado para uma persona do SafraIA. */
-export function resolverPersona(perfilId?: string): SafraIAPersonaId {
-  switch ((perfilId ?? "").toLowerCase()) {
-    case "administrador":
-    case "financeiro":
-      return "administrador";
-    case "agronomo":
-      return "agronomo";
-    case "gerente-agricola":
-    case "supervisor-campo":
-    case "estoquista":
-      return "gerente";
-    case "proprietario":
-    default:
-      return "produtor";
-  }
+const CONSULTAS_POR_MODULO: Record<SafraIAModulo, SafraIAPerfil["consultas"]> = {
+  Propriedades: [{ nome: "resumo_propriedades", descricao: "Propriedades e áreas da empresa." }],
+  Talhões: [{ nome: "area_disponivel", descricao: "Talhões e áreas disponíveis." }, { nome: "safras", descricao: "Safras e culturas cadastradas." }],
+  "Funcionários": [{ nome: "equipe", descricao: "Funcionários ativos por propriedade." }],
+  Atividades: [{ nome: "atividades", descricao: "Atividades agrícolas e atrasos." }, { nome: "maquinas", descricao: "Uso de máquinas nas atividades." }, { nome: "consumo_insumos", descricao: "Insumos aplicados nas atividades." }],
+  Financeiro: [{ nome: "custos", descricao: "Despesas e custos financeiros." }, { nome: "fluxo_mensal", descricao: "Receitas, despesas e saldo por mês." }, { nome: "custo_por_hectare", descricao: "Custos de safra por hectare." }],
+  Insumos: [{ nome: "estoque", descricao: "Situação do estoque." }, { nome: "movimentacoes_estoque", descricao: "Entradas e saídas de estoque." }, { nome: "fornecedores", descricao: "Fornecedores com entradas na empresa." }],
+};
+
+/** Perfil local para demonstração e fallback quando o backend não está disponível. */
+export function papelDemoSafraIA(perfilId?: string): SafraIAPapel {
+  const normalizado = (perfilId ?? "").trim().toLowerCase();
+  return Object.values(PAPEIS_DEMO).find((papel) => papel.papel === normalizado) ?? PAPEIS_DEMO.colaborador;
+}
+
+export function perfilDemoSafraIA(perfilId?: string): SafraIAPerfil {
+  const papel = papelDemoSafraIA(perfilId);
+  return {
+    papel: papel.papel,
+    nome_papel: papel.nome_papel,
+    foco: papel.foco,
+    saudacao: papel.saudacao,
+    sugestoes: papel.sugestoes,
+    consultas: [...new Map(papel.modulos.flatMap((modulo) => CONSULTAS_POR_MODULO[modulo]).map((consulta) => [consulta.nome, consulta])).values()],
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -149,6 +179,7 @@ const temAlguma = (t: string, termos: string[]) => termos.some((k) => t.includes
 // ---------------------------------------------------------------------------
 export type SafraIAIntent =
   | "resumo-geral"
+  | "resumo-propriedades"
   | "areas-disponiveis"
   | "talhoes-produtivos"
   | "produtividade-historica"
@@ -162,6 +193,7 @@ export type SafraIAIntent =
 function classificar(perguntaNorm: string): SafraIAIntent {
   const t = perguntaNorm;
 
+  if (t.includes("propriedad")) return "resumo-propriedades";
   if (temAlguma(t, ["vencid", "validade", "vencimento"])) return "produtos-vencidos";
   if (temAlguma(t, ["estoque minimo", "estoque baixo", "repor", "reposicao", "abaixo do minimo"]) ||
       (t.includes("estoque") && temAlguma(t, ["alerta", "minimo", "baixo", "acabando"])))
@@ -202,6 +234,31 @@ const semDados = (intent: string, texto: string, sugestoes?: string[]): SafraIAR
   texto,
   sugestoes,
 });
+
+const resumoPropriedades: Fn = (ctx) => {
+  const propriedades = ctx.propriedades.filter((propriedade) => propriedade.status !== false);
+  if (!propriedades.length) {
+    return semDados("resumo-propriedades", "Não há propriedades cadastradas para consultar.");
+  }
+  const areaTotal = propriedades.reduce((total, propriedade) => total + Number(propriedade.area_total || 0), 0);
+  return {
+    intent: "resumo-propriedades",
+    texto: `A empresa tem ${propriedades.length} propriedade(s) ativa(s), com ${nf(areaTotal, 1)} ha de área total cadastrada.`,
+    destaques: [
+      { rotulo: "Propriedades", valor: String(propriedades.length), tom: "neutro" },
+      { rotulo: "Área total", valor: `${nf(areaTotal, 1)} ha`, tom: "positivo" },
+    ],
+    tabela: {
+      titulo: "Propriedades ativas",
+      colunas: ["Propriedade", "Área total", "Área agricultável"],
+      linhas: propriedades.map((propriedade) => [
+        propriedade.nome_propriedade,
+        `${nf(Number(propriedade.area_total || 0), 1)} ha`,
+        `${nf(Number(propriedade.area_agricultavel || 0), 1)} ha`,
+      ]),
+    },
+  };
+};
 
 /** 1. Áreas disponíveis para plantio (consulta de gestão). */
 const areasDisponiveis: Fn = (ctx) => {
@@ -582,83 +639,121 @@ const lucratividadeSafra: Fn = (ctx) => {
 };
 
 /** 10. Resumo geral / fallback (visão da fazenda). */
-const resumoGeral = (ctx: SafraIAContexto, persona: SafraIAPersona): SafraIAResposta => {
-  const areaDisp = ctx.talhoes.reduce((s, t) => s + areaDisponivel(t), 0);
-  const emAlerta = ctx.insumos.filter(abaixoMinimo).length;
-  const vencidos = ctx.insumos.filter(isVencido).length;
-  const atrasadas = ctx.atividades.filter(isAtrasada).length;
-  const valorEstoqueTotal = ctx.insumos.reduce((s, i) => s + valorEstoque(i), 0);
+const resumoGeral = (ctx: SafraIAContexto, papel: SafraIAPapel): SafraIAResposta => {
+  const temModulo = (modulo: SafraIAModulo) => papel.modulos.includes(modulo);
+  const destaques: SafraIADestaque[] = [];
+  const alertas: SafraIAAlerta[] = [];
 
-  const destaques: SafraIADestaque[] = [
-    { rotulo: "Talhões", valor: String(ctx.talhoes.length), tom: "neutro" },
-    { rotulo: "Área livre", valor: `${nf(areaDisp, 1)} ha`, tom: "positivo" },
-    { rotulo: "Estoque em alerta", valor: String(emAlerta), tom: emAlerta ? "atencao" : "positivo" },
-    { rotulo: "Produtos vencidos", valor: String(vencidos), tom: vencidos ? "critico" : "positivo" },
-  ];
-
-  if (persona.verFinanceiro) {
+  if (temModulo("Talhões")) {
+    const areaDisp = ctx.talhoes.reduce((s, t) => s + areaDisponivel(t), 0);
+    destaques.push(
+      { rotulo: "Talhões", valor: String(ctx.talhoes.length), tom: "neutro" },
+      { rotulo: "Área livre", valor: `${nf(areaDisp, 1)} ha`, tom: "positivo" }
+    );
+  }
+  if (temModulo("Insumos")) {
+    const emAlerta = ctx.insumos.filter(abaixoMinimo).length;
+    const vencidos = ctx.insumos.filter(isVencido).length;
+    const valorEstoqueTotal = ctx.insumos.reduce((s, i) => s + valorEstoque(i), 0);
+    destaques.push(
+      { rotulo: "Estoque em alerta", valor: String(emAlerta), tom: emAlerta ? "atencao" : "positivo" },
+      { rotulo: "Produtos vencidos", valor: String(vencidos), tom: vencidos ? "critico" : "positivo" },
+      { rotulo: "Capital em estoque", valor: brl(valorEstoqueTotal), tom: "neutro" }
+    );
+    if (vencidos) alertas.push({ nivel: "critico", titulo: `${vencidos} produto(s) vencido(s)`, descricao: "Bloqueados para uso (RN002)." });
+    if (emAlerta) alertas.push({ nivel: "alerta", titulo: `${emAlerta} insumo(s) no estoque mínimo`, descricao: "Considere reposição (RN004)." });
+  }
+  if (temModulo("Atividades")) {
+    const atrasadas = ctx.atividades.filter(isAtrasada).length;
+    if (atrasadas) alertas.push({ nivel: "alerta", titulo: `${atrasadas} atividade(s) atrasada(s)` });
+    destaques.push({ rotulo: "Atividades atrasadas", valor: String(atrasadas), tom: atrasadas ? "critico" : "positivo" });
+  }
+  if (temModulo("Financeiro")) {
     const saldo = ctx.lancamentos.reduce(
       (s, l) => s + (l.tipo === "RECEITA" ? Number(l.valor || 0) : -Number(l.valor || 0)),
       0
     );
     destaques.push({ rotulo: "Resultado financeiro", valor: brl(saldo), tom: saldo >= 0 ? "positivo" : "critico" });
   }
-  destaques.push({ rotulo: "Capital em estoque", valor: brl(valorEstoqueTotal), tom: "neutro" });
-
-  const alertas: SafraIAAlerta[] = [];
-  if (vencidos) alertas.push({ nivel: "critico" as const, titulo: `${vencidos} produto(s) vencido(s)`, descricao: "Bloqueados para uso (RN002)." });
-  if (emAlerta) alertas.push({ nivel: "alerta" as const, titulo: `${emAlerta} insumo(s) no estoque mínimo`, descricao: "Considere reposição (RN004)." });
-  if (atrasadas) alertas.push({ nivel: "alerta" as const, titulo: `${atrasadas} atividade(s) atrasada(s)` });
 
   return {
     intent: "resumo-geral",
-    texto: `Aqui está o panorama da fazenda para o perfil ${persona.nome}. ${
-      alertas.length ? "Há pontos que pedem atenção (veja os alertas)." : "Tudo sob controle no momento."
+    texto: `Aqui está o panorama da fazenda para ${papel.nome_papel}. ${
+      alertas.length ? "Há pontos que pedem atenção (veja os alertas)." : "Não encontrei alertas nos módulos disponíveis."
     }`,
     destaques,
     alertas: alertas.length ? alertas : undefined,
-    sugestoes: persona.sugestoes,
+    sugestoes: papel.sugestoes,
   };
 };
 
 // ---------------------------------------------------------------------------
 // Orquestrador
 // ---------------------------------------------------------------------------
-const INTENTS_FINANCEIRAS: SafraIAIntent[] = ["custo-hectare", "lucratividade-safra"];
+const MODULO_POR_INTENT: Partial<Record<SafraIAIntent, SafraIAModulo>> = {
+  "resumo-propriedades": "Propriedades",
+  "areas-disponiveis": "Talhões",
+  "talhoes-produtivos": "Talhões",
+  "produtividade-historica": "Talhões",
+  "custo-fertilizantes": "Financeiro",
+  "estoque-alertas": "Insumos",
+  "produtos-vencidos": "Insumos",
+  "custo-hectare": "Financeiro",
+  "lucratividade-safra": "Financeiro",
+};
 
 /** Saudação inicial exibida ao abrir o chat. */
-export function saudacaoInicial(personaId: SafraIAPersonaId): SafraIAResposta {
-  const persona = PERSONAS[personaId];
-  return { intent: "saudacao", texto: persona.saudacao, sugestoes: persona.sugestoes };
+export function saudacaoInicial(papelId: string): SafraIAResposta {
+  const papel = papelDemoSafraIA(papelId);
+  return { intent: "saudacao", texto: papel.saudacao, sugestoes: papel.sugestoes, papel: papel.papel };
 }
 
 /** Motor principal: interpreta a pergunta e devolve a resposta estruturada. */
 export function responderSafraIA(payload: SafraIAConsultaPayload): SafraIAResposta {
-  const persona = PERSONAS[payload.persona] ?? PERSONAS.produtor;
-  const intent = classificar(norm(payload.pergunta));
+  const papel = papelDemoSafraIA(payload.papel);
+  const pergunta = norm(payload.pergunta);
+  const intent = classificar(pergunta);
+  const modulo = intent === "atividades-funcionarios" &&
+    temAlguma(pergunta, ["funcionario", "equipe", "responsavel", "colaborador", "desempenho"])
+    ? "Funcionários"
+    : MODULO_POR_INTENT[intent] ?? (intent === "atividades-funcionarios" ? "Atividades" : undefined);
 
-  // Controle de acesso por persona: análises financeiras sensíveis.
-  if (INTENTS_FINANCEIRAS.includes(intent) && !persona.verFinanceiro) {
+  if (intent === "resumo-geral" ? papel.modulos.length === 0 : !modulo || !papel.modulos.includes(modulo)) {
     return {
       intent: "acesso-negado",
-      texto: `O perfil ${persona.nome} não tem acesso a detalhes financeiros (custos e lucratividade). Posso ajudar com produtividade, áreas, atividades e estoque.`,
+      texto: `O papel ${papel.nome_papel} não tem acesso a essa informação pelos módulos disponíveis.`,
       alertas: [{ nivel: "info", titulo: "Acesso restrito", descricao: "Consulte um Administrador para análises financeiras." }],
-      sugestoes: persona.sugestoes,
+      sugestoes: papel.sugestoes,
+      papel: papel.papel,
     };
   }
 
+  let resposta: SafraIAResposta;
   switch (intent) {
-    case "areas-disponiveis": return areasDisponiveis(payload.contexto);
-    case "talhoes-produtivos": return talhoesProdutivos(payload.contexto);
-    case "produtividade-historica": return produtividadeHistorica(payload.contexto);
-    case "custo-fertilizantes": return custoFertilizantes(payload.contexto);
-    case "atividades-funcionarios": return atividadesFuncionarios(payload.contexto);
-    case "estoque-alertas": return estoqueAlertas(payload.contexto);
-    case "produtos-vencidos": return produtosVencidos(payload.contexto);
-    case "custo-hectare": return custoHectare(payload.contexto);
-    case "lucratividade-safra": return lucratividadeSafra(payload.contexto);
+    case "resumo-propriedades": resposta = resumoPropriedades(payload.contexto); break;
+    case "areas-disponiveis": resposta = areasDisponiveis(payload.contexto); break;
+    case "talhoes-produtivos": resposta = talhoesProdutivos(payload.contexto); break;
+    case "produtividade-historica": resposta = produtividadeHistorica(payload.contexto); break;
+    case "custo-fertilizantes": resposta = custoFertilizantes(payload.contexto); break;
+    case "atividades-funcionarios":
+      resposta = atividadesFuncionarios(payload.contexto);
+      if (!papel.modulos.includes("Funcionários")) {
+        const total = payload.contexto.atividades.length;
+        const atrasadas = payload.contexto.atividades.filter(isAtrasada).length;
+        resposta = {
+          ...resposta,
+          texto: `Há ${total} atividade(s) registradas, com ${atrasadas} atrasada(s).`,
+          tabela: undefined,
+        };
+      }
+      break;
+    case "estoque-alertas": resposta = estoqueAlertas(payload.contexto); break;
+    case "produtos-vencidos": resposta = produtosVencidos(payload.contexto); break;
+    case "custo-hectare": resposta = custoHectare(payload.contexto); break;
+    case "lucratividade-safra": resposta = lucratividadeSafra(payload.contexto); break;
     case "resumo-geral":
     default:
-      return resumoGeral(payload.contexto, persona);
+      resposta = resumoGeral(payload.contexto, papel);
   }
+  return { ...resposta, papel: papel.papel };
 }

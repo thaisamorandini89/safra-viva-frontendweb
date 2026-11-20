@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { responderSafraIA, saudacaoInicial, PERSONAS } from "./safraIAMock";
-import { SafraIAContexto, SafraIAPersonaId } from "../types/safraIA";
+import { perfilDemoSafraIA, responderSafraIA, saudacaoInicial, PAPEIS_DEMO } from "./safraIAMock";
+import { SafraIAContexto, SafraIAPapelId } from "../types/safraIA";
 import { Insumo, MovimentacaoEstoque } from "../types/insumo";
 import { Talhao } from "../types/talhao";
 import { AtividadeAgricola } from "../types/atividade";
@@ -80,14 +80,15 @@ const ctx = (over: Partial<SafraIAContexto>): SafraIAContexto => ({
   atividades: [],
   lancamentos: [],
   safras: [],
+  propriedades: [],
   ...over,
 });
 
 const perguntar = (
   pergunta: string,
   contexto: SafraIAContexto,
-  persona: SafraIAPersonaId = "administrador"
-) => responderSafraIA({ pergunta, persona, contexto });
+  papel: SafraIAPapelId = "administrador"
+) => responderSafraIA({ pergunta, papel, contexto });
 
 const PASSADO = "2000-01-01";
 const FUTURO = "2099-01-01";
@@ -174,7 +175,7 @@ describe("responderSafraIA — intenções", () => {
     expect(vencidos?.valor).toBe("1");
   });
 
-  it("lucratividade por safra (persona com acesso)", () => {
+  it("lucratividade por safra (papel com acesso)", () => {
     const r = perguntar(
       "Qual a lucratividade por safra?",
       ctx({
@@ -190,7 +191,7 @@ describe("responderSafraIA — intenções", () => {
     expect(r.texto).toContain("600");
   });
 
-  it("custo por hectare (persona com acesso)", () => {
+  it("custo por hectare (papel com acesso)", () => {
     const r = perguntar(
       "Qual o custo por hectare?",
       ctx({
@@ -212,37 +213,73 @@ describe("responderSafraIA — intenções", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Controle de acesso por persona
+// Controle de acesso por papel
 // ---------------------------------------------------------------------------
-describe("responderSafraIA — permissões por persona", () => {
-  it("Agrônomo não acessa lucratividade (financeiro bloqueado)", () => {
+describe("responderSafraIA — permissões por papel", () => {
+  it("Agrônomo não acessa lucratividade (sem módulo Financeiro)", () => {
     const r = perguntar("Qual a lucratividade por safra?", ctx({}), "agronomo");
     expect(r.intent).toBe("acesso-negado");
     expect(r.texto.toLowerCase()).toContain("não tem acesso");
   });
 
-  it("Gerente Operacional não acessa custo por hectare", () => {
-    const r = perguntar("Qual o custo por hectare?", ctx({}), "gerente");
-    expect(r.intent).toBe("acesso-negado");
-  });
-
-  it("Produtor Rural tem acesso financeiro", () => {
+  it("Gerente Agrícola tem acesso financeiro", () => {
     const r = perguntar(
       "Qual a lucratividade por safra?",
       ctx({ lancamentos: [lancamento({ tipo: "RECEITA", valor: 500, nome_safra: "X" })] }),
-      "produtor"
+      "gerente-agricola"
     );
     expect(r.intent).toBe("lucratividade-safra");
+    expect(r.papel).toBe("gerente-agricola");
+  });
+
+  it("papel desconhecido não recebe dados da fazenda", () => {
+    const r = responderSafraIA({
+      pergunta: "Como está minha fazenda?",
+      papel: "visitante",
+      contexto: ctx({ talhoes: [talhao({})], lancamentos: [lancamento({ valor: 10000 })] }),
+    });
+    expect(r.intent).toBe("acesso-negado");
+    expect(r.destaques).toBeUndefined();
+  });
+
+  it("operador consulta atividades, mas não recebe nomes ou custos da equipe", () => {
+    const r = perguntar(
+      "Quais atividades estão atrasadas?",
+      ctx({ atividades: [atividade({ responsavel: "Segredo" })] }),
+      "operador"
+    );
+    expect(r.intent).toBe("atividades-funcionarios");
+    expect(r.texto).not.toContain("Segredo");
+    expect(r.tabela).toBeUndefined();
+  });
+
+  it("PAPEIS_DEMO segue os módulos padrão e fallback genérico", () => {
+    expect(PAPEIS_DEMO["gerente-agricola"].modulos).toContain("Financeiro");
+    expect(PAPEIS_DEMO.agronomo.modulos).not.toContain("Financeiro");
+    expect(perfilDemoSafraIA("visitante").papel).toBe("colaborador");
+  });
+
+  it("consulta propriedades para quem tem acesso e recusa financeiro e estoquista", () => {
+    const contexto = ctx({
+      propriedades: [
+        { id_propriedade: 1, nome_propriedade: "Sede", status: true, area_total: 100 },
+        { id_propriedade: 2, nome_propriedade: "Inativa", status: false, area_total: 50 },
+      ],
+    });
+    const administrador = perguntar("Quantas propriedades eu tenho?", contexto);
+    expect(administrador.destaques?.find((item) => item.rotulo === "Propriedades")?.valor).toBe("1");
+    expect(perguntar("Quantas propriedades eu tenho?", contexto, "financeiro").intent).toBe("acesso-negado");
+    expect(perguntar("Quantas propriedades eu tenho?", contexto, "estoquista").intent).toBe("acesso-negado");
   });
 });
 
 // ---------------------------------------------------------------------------
-// Saudação inicial por persona
+// Saudação inicial por papel
 // ---------------------------------------------------------------------------
 describe("saudacaoInicial", () => {
-  it("usa a saudação e as sugestões da persona", () => {
+  it("usa a saudação e as sugestões do papel", () => {
     const r = saudacaoInicial("agronomo");
-    expect(r.texto).toBe(PERSONAS.agronomo.saudacao);
-    expect(r.sugestoes).toEqual(PERSONAS.agronomo.sugestoes);
+    expect(r.texto).toBe(PAPEIS_DEMO.agronomo.saudacao);
+    expect(r.sugestoes).toEqual(PAPEIS_DEMO.agronomo.sugestoes);
   });
 });

@@ -27,10 +27,12 @@ import {
   erroDoBackend,
 } from './insumosAdapter';
 import {
+  SafraIAPropriedade,
+  SafraIAPerfil,
   SafraIAConsultaPayload,
   SafraIAResposta,
 } from '../types/safraIA';
-import { responderSafraIA } from './safraIAMock';
+import { perfilDemoSafraIA, responderSafraIA } from './safraIAMock';
 import { lerToken } from './authToken';
 import {
   Lancamento,
@@ -101,9 +103,9 @@ export async function getEmpresas(): Promise<EmpresaAgricola[]> {
 }
 
 /** Lista as propriedades cadastradas (usado para cruzar dados no dashboard) */
-export async function getPropriedadesLista(): Promise<any[]> {
+export async function getPropriedadesLista(): Promise<SafraIAPropriedade[]> {
   try {
-    const { data } = await api.get<any[]>('/api/propriedades');
+    const { data } = await api.get<SafraIAPropriedade[]>('/api/propriedades');
     return Array.isArray(data) ? data : [];
   } catch {
     console.warn('[propriedades] endpoint indisponível.');
@@ -725,6 +727,37 @@ export async function criarMovimentacao(
 // ---------------------------------------------------------------------------
 // SafraIA — assistente inteligente rural
 // ---------------------------------------------------------------------------
+
+/**
+ * Busca o contexto do papel no backend ou usa o perfil local no modo demonstração.
+ */
+export async function getPerfilSafraIA(papel: string): Promise<SafraIAPerfil> {
+  const demonstracao = () => perfilDemoSafraIA(papel);
+  if (!lerToken()) return demonstracao();
+  try {
+    const { data } = await api.get<SafraIAPerfil>('/api/safra-ia/perfil');
+    if (
+      data &&
+      typeof data.papel === 'string' &&
+      typeof data.nome_papel === 'string' &&
+      typeof data.foco === 'string' &&
+      typeof data.saudacao === 'string' &&
+      Array.isArray(data.sugestoes) &&
+      Array.isArray(data.consultas)
+    ) return data;
+    return demonstracao();
+  } catch (erro) {
+    if (axios.isAxiosError(erro) && erro.response) {
+      const mensagem = (erro.response.data as { error?: string } | undefined)?.error;
+      const gatewaySemBackend = !mensagem && [502, 503, 504].includes(erro.response.status);
+      if (!gatewaySemBackend) {
+        throw new Error(mensagem || `Não foi possível carregar o perfil do SafraIA (HTTP ${erro.response.status}).`);
+      }
+    }
+    console.warn('[safra-ia] backend sem resposta — usando perfil de demonstração.');
+    return demonstracao();
+  }
+}
 
 /**
  * Envia a pergunta do usuário ao agente SafraIA. Quando o backend LLM

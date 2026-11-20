@@ -1,35 +1,47 @@
 // ---------------------------------------------------------------------------
 // Módulo SafraIA (Assistente Inteligente Rural) — tipos de domínio
 // ---------------------------------------------------------------------------
-// Contratos compartilhados entre a UI do chat e o motor de interpretação de
-// consultas (simulação de um backend LLM). O agente adapta respostas e
-// permissões conforme a persona do usuário logado.
-// ---------------------------------------------------------------------------
 
 import { Insumo, MovimentacaoEstoque } from "./insumo";
 import { Talhao } from "./talhao";
 import { AtividadeAgricola } from "./atividade";
 import { Lancamento, Safra } from "./financeiro";
 
-/** Personas suportadas pelo assistente (níveis de acesso). */
-export type SafraIAPersonaId =
-  | "produtor"
-  | "agronomo"
+export type SafraIAPapelId =
   | "administrador"
-  | "gerente";
+  | "proprietario"
+  | "gerente-agricola"
+  | "agronomo"
+  | "supervisor-campo"
+  | "financeiro"
+  | "estoquista"
+  | "operador"
+  | "colaborador";
 
-export interface SafraIAPersona {
-  id: SafraIAPersonaId;
+export type SafraIAModulo =
+  | "Propriedades"
+  | "Talhões"
+  | "Funcionários"
+  | "Atividades"
+  | "Financeiro"
+  | "Insumos";
+
+export interface SafraIAConsultaDisponivel {
   nome: string;
-  icone: string;
-  /** Resumo do foco de atuação da persona. */
+  descricao: string;
+}
+
+export interface SafraIAPerfil {
+  papel: SafraIAPapelId;
+  nome_papel: string;
   foco: string;
-  /** Mensagem de boas-vindas exibida ao abrir o chat. */
   saudacao: string;
-  /** Perguntas sugeridas iniciais, específicas da persona. */
   sugestoes: string[];
-  /** Define se a persona pode consultar análises financeiras sensíveis. */
-  verFinanceiro: boolean;
+  consultas: SafraIAConsultaDisponivel[];
+}
+
+export interface SafraIAPapel extends SafraIAPerfil {
+  modulos: SafraIAModulo[];
 }
 
 /** Tom visual de um destaque/insight retornado pelo agente. */
@@ -60,6 +72,7 @@ export interface SafraIAResposta {
   intent: string;
   /** Resumo em linguagem natural. */
   texto: string;
+  papel?: string;
   destaques?: SafraIADestaque[];
   alertas?: SafraIAAlerta[];
   tabela?: SafraIATabela;
@@ -77,12 +90,23 @@ export interface SafraIAContexto {
   atividades: AtividadeAgricola[];
   lancamentos: Lancamento[];
   safras: Safra[];
+  propriedades: SafraIAPropriedade[];
+}
+
+export interface SafraIAPropriedade {
+  id_propriedade: number;
+  nome_propriedade: string;
+  status?: boolean;
+  area_total?: number | string;
+  area_agricultavel?: number | string;
+  area_preservacao?: number | string;
+  area_pastagem?: number | string;
 }
 
 /** Payload de consulta ao assistente. */
 export interface SafraIAConsultaPayload {
   pergunta: string;
-  persona: SafraIAPersonaId;
+  papel: string;
   contexto: SafraIAContexto;
 }
 
