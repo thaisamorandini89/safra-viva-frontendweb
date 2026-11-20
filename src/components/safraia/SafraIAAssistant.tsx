@@ -101,11 +101,12 @@ export default function SafraIAAssistant() {
             : m
         )
       );
-    } catch {
+    } catch (erro) {
+      const detalhe = erro instanceof Error && erro.message ? erro.message : "Tente novamente.";
       setMensagens((atuais) =>
         atuais.map((m) =>
           m.id === idCarregando
-            ? { ...m, texto: "Não consegui processar sua pergunta agora. Tente novamente.", carregando: false }
+            ? { ...m, texto: `Não consegui processar sua pergunta agora. ${detalhe}`, carregando: false }
             : m
         )
       );
