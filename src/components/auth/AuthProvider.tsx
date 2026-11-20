@@ -18,6 +18,8 @@ import {
   SessaoUsuario,
   SESSAO_MS,
 } from "./authStore";
+import { loginBackend } from "../../services/api";
+import { limparToken, salvarToken } from "../../services/authToken";
 
 interface PendenteMfa {
   usuario: SessaoUsuario;
@@ -68,6 +70,10 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     (email: string, senha: string, lembrarAcesso: boolean): ResultadoAuth => {
       const res = autenticar(email, senha);
       if (!res.ok || !res.usuario) return res;
+      // Token do backend em segundo plano; sem ele o app segue em modo demonstração.
+      loginBackend(email.trim(), senha)
+        .then((token) => salvarToken(token, lembrarAcesso))
+        .catch(() => limparToken());
       if (res.mfa) {
         setPendente({ usuario: res.usuario, lembrar: lembrarAcesso, codigo: gerarCodigoMfa() });
         return res;

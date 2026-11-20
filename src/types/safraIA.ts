@@ -65,6 +65,8 @@ export interface SafraIAResposta {
   tabela?: SafraIATabela;
   /** Perguntas de acompanhamento sugeridas. */
   sugestoes?: string[];
+  /** "backend" = agente real (Gemini + dados do banco); "demonstracao" = motor local. */
+  origem?: "backend" | "demonstracao";
 }
 
 /** Contexto da fazenda enviado ao agente para análise. */

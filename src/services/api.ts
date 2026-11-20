@@ -31,6 +31,7 @@ import {
   SafraIAResposta,
 } from '../types/safraIA';
 import { responderSafraIA } from './safraIAMock';
+import { lerToken } from './authToken';
 import {
   Lancamento,
   NovoLancamentoPayload,
@@ -59,6 +60,19 @@ import {
 
 // Deixe vazio para usar o proxy do Vite (localhost:5173 -> localhost:5000)
 const api = axios.create({});
+
+api.interceptors.request.use((config) => {
+  const token = lerToken();
+  if (token) config.headers.set('Authorization', `Bearer ${token}`);
+  return config;
+});
+
+/** Autentica no backend e devolve o token JWT (lança erro se recusado/indisponível). */
+export async function loginBackend(email: string, senha: string): Promise<string> {
+  const { data } = await api.post<{ token: string }>('/api/auth/login', { email, senha });
+  if (!data?.token) throw new Error('Resposta de login sem token.');
+  return data.token;
+}
 
 export const getEstados = () => api.get<Estado[]>('/api/estados');
 
@@ -720,16 +734,27 @@ export async function criarMovimentacao(
 export async function consultarSafraIA(
   payload: SafraIAConsultaPayload
 ): Promise<SafraIAResposta> {
+  const demonstracao = (): SafraIAResposta => ({ ...responderSafraIA(payload), origem: 'demonstracao' });
+  // Sem login no backend não há como consultar o agente real.
+  if (!lerToken()) return demonstracao();
   try {
     const { data } = await api.post<SafraIAResposta>('/api/safra-ia/consultar', {
       pergunta: payload.pergunta,
-      persona: payload.persona,
     });
-    if (data && typeof data.texto === 'string') return data;
-    return responderSafraIA(payload);
-  } catch {
-    console.warn('[safra-ia] endpoint indisponível — usando interpretação local.');
-    return responderSafraIA(payload);
+    if (data && typeof data.texto === 'string') return { ...data, origem: 'backend' };
+    return demonstracao();
+  } catch (erro) {
+    // Backend respondeu com erro (permissão, limite, falha do LLM): mostra a mensagem real.
+    // 502/503/504 sem corpo do backend = proxy sem conseguir alcançá-lo, trata como indisponível.
+    if (axios.isAxiosError(erro) && erro.response) {
+      const mensagem = (erro.response.data as { error?: string } | undefined)?.error;
+      const gatewaySemBackend = !mensagem && [502, 503, 504].includes(erro.response.status);
+      if (!gatewaySemBackend) {
+        throw new Error(mensagem || `O SafraIA recusou a consulta (HTTP ${erro.response.status}).`);
+      }
+    }
+    console.warn('[safra-ia] backend sem resposta — usando modo demonstração.');
+    return demonstracao();
   }
 }
 

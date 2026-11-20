@@ -1,4 +1,5 @@
 import { carregarEstado } from "../configuracoes/store";
+import { limparToken } from "../../services/authToken";
 
 // ---------------------------------------------------------------------------
 // Módulo de Autenticação — regras e persistência local.
@@ -198,6 +199,7 @@ export function salvarSessao(sessao: SessaoPersistida) {
 }
 
 export function limparSessao() {
+  limparToken();
   try {
     localStorage.removeItem(SESSAO_KEY);
     sessionStorage.removeItem(SESSAO_KEY);
