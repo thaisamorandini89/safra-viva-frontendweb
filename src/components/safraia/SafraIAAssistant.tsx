@@ -5,13 +5,15 @@ import {
   getMovimentacoes,
   getTalhoes,
   getAtividades,
+  getPropriedadesLista,
   getLancamentos,
   getSafras,
   consultarSafraIA,
+  getPerfilSafraIA,
 } from "../../services/api";
 import { useAuth } from "../auth/AuthProvider";
-import { PERSONAS, resolverPersona, saudacaoInicial } from "../../services/safraIAMock";
-import { SafraIAContexto, SafraIAMensagem as Mensagem, SafraIAPersonaId } from "../../types/safraIA";
+import { perfilDemoSafraIA } from "../../services/safraIAMock";
+import { SafraIAContexto, SafraIAMensagem as Mensagem } from "../../types/safraIA";
 import SafraIAMensagem from "./SafraIAMensagem";
 
 let seq = 0;
@@ -25,15 +27,14 @@ export default function SafraIAAssistant() {
   const [mensagens, setMensagens] = useState<Mensagem[]>([]);
   const fimRef = useRef<HTMLDivElement>(null);
 
-  const [personaOverride, setPersonaOverride] = useState<SafraIAPersonaId | null>(null);
-  const personaAuth = useMemo(() => resolverPersona(usuario?.perfil), [usuario?.perfil]);
-  const personaId = personaOverride ?? personaAuth;
-  const persona = PERSONAS[personaId];
-
-  function trocarPersona(id: SafraIAPersonaId) {
-    setPersonaOverride(id);
-    setMensagens([]); // reinicia a conversa para refletir a nova persona
-  }
+  const papel = usuario?.perfil ?? "colaborador";
+  const perfilFallback = useMemo(() => perfilDemoSafraIA(papel), [papel]);
+  const { data: perfilBackend } = useQuery({
+    queryKey: ["safra-ia-perfil", papel],
+    queryFn: () => getPerfilSafraIA(papel),
+    enabled: Boolean(usuario),
+  });
+  const perfil = perfilBackend ?? perfilFallback;
 
   // --------------------------------------------------- dados da fazenda
   const { data: insumos = [] } = useQuery({ queryKey: ["insumos"], queryFn: getInsumos });
@@ -43,6 +44,10 @@ export default function SafraIAAssistant() {
   });
   const { data: talhoes = [] } = useQuery({ queryKey: ["talhoes"], queryFn: getTalhoes });
   const { data: atividades = [] } = useQuery({ queryKey: ["atividades"], queryFn: getAtividades });
+  const { data: propriedades = [] } = useQuery({
+    queryKey: ["propriedades"],
+    queryFn: getPropriedadesLista,
+  });
   const { data: lancamentos = [] } = useQuery({
     queryKey: ["financeiro-lancamentos"],
     queryFn: () => getLancamentos(),
@@ -53,21 +58,31 @@ export default function SafraIAAssistant() {
   });
 
   const contexto: SafraIAContexto = useMemo(
-    () => ({ insumos, movimentacoes, talhoes, atividades, lancamentos, safras }),
-    [insumos, movimentacoes, talhoes, atividades, lancamentos, safras]
+    () => ({ insumos, movimentacoes, talhoes, atividades, lancamentos, safras, propriedades }),
+    [insumos, movimentacoes, talhoes, atividades, lancamentos, safras, propriedades]
   );
 
-  // Saudação inicial ao abrir pela primeira vez (ou ao trocar de persona).
+  // Atualiza a saudação se o perfil do backend chegar depois da abertura do chat.
   useEffect(() => {
     if (!aberto) return;
     setMensagens((atuais) => {
-      if (atuais.length) return atuais;
-      const saud = saudacaoInicial(personaId);
-      return [
-        { id: uid(), remetente: "assistente", texto: saud.texto, resposta: saud, hora: new Date().toISOString() },
-      ];
+      const resposta = {
+        intent: "saudacao",
+        texto: perfil.saudacao,
+        sugestoes: perfil.sugestoes,
+        papel: perfil.papel,
+      };
+      if (!atuais.length) {
+        return [{ id: uid(), remetente: "assistente", texto: resposta.texto, resposta, hora: new Date().toISOString() }];
+      }
+      if (atuais[0].resposta?.intent === "saudacao") {
+        return atuais.map((mensagem, indice) => indice === 0
+          ? { ...mensagem, texto: resposta.texto, resposta }
+          : mensagem);
+      }
+      return atuais;
     });
-  }, [aberto, personaId]);
+  }, [aberto, perfil]);
 
   useEffect(() => {
     fimRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -75,8 +90,8 @@ export default function SafraIAAssistant() {
 
   const sugestoesAtuais = useMemo(() => {
     const ultimaAssistente = [...mensagens].reverse().find((m) => m.remetente === "assistente" && !m.carregando);
-    return ultimaAssistente?.resposta?.sugestoes ?? persona.sugestoes;
-  }, [mensagens, persona.sugestoes]);
+    return ultimaAssistente?.resposta?.sugestoes ?? perfil.sugestoes;
+  }, [mensagens, perfil.sugestoes]);
 
   // --------------------------------------------------- envio de mensagem
   async function enviar(pergunta: string) {
@@ -93,7 +108,7 @@ export default function SafraIAAssistant() {
     setEnviando(true);
 
     try {
-      const resposta = await consultarSafraIA({ pergunta: texto, persona: personaId, contexto });
+      const resposta = await consultarSafraIA({ pergunta: texto, papel, contexto });
       setMensagens((atuais) =>
         atuais.map((m) =>
           m.id === idCarregando
@@ -148,7 +163,7 @@ export default function SafraIAAssistant() {
                 <div>
                   <p className="text-sm font-bold leading-tight">Assistente SafraIA</p>
                   <p className="text-[11px] text-green-100 leading-tight">
-                    {persona.icone} {persona.nome} · {persona.foco}
+                    {perfil.nome_papel} · {perfil.foco}
                   </p>
                 </div>
               </div>
@@ -159,22 +174,6 @@ export default function SafraIAAssistant() {
               >
                 ✕
               </button>
-            </div>
-
-            {/* Seletor de persona (demonstração de níveis de acesso) */}
-            <div className="bg-green-50 border-b border-green-100 px-4 py-2 flex items-center gap-2">
-              <span className="text-[11px] text-gray-500 shrink-0">Visualizar como:</span>
-              <select
-                value={personaId}
-                onChange={(e) => trocarPersona(e.target.value as SafraIAPersonaId)}
-                className="flex-1 text-[11px] text-gray-700 bg-white border border-green-200 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-green-400"
-              >
-                {Object.values(PERSONAS).map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.icone} {p.nome}
-                  </option>
-                ))}
-              </select>
             </div>
 
             {/* Mensagens */}
